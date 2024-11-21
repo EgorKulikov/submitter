@@ -36,7 +36,7 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
     while is_cloudflare(driver).await? {
         times += 1;
         if times > 10 {
-            eprintln!("Too many times");
+            eprintln!("Cannot bypass cloudflare captcha, please submit manually");
             return Ok(vec![]);
         }
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -48,7 +48,7 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
     while is_cloudflare(driver).await? {
         times += 1;
         if times > 1 {
-            // eprintln!("Too many times");
+            // eprintln!("Cannot bypass cloudflare captcha, please submit manually");
             return Ok(driver.get_all_cookies().await?);
         }
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -71,7 +71,7 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
     while is_cloudflare(driver).await? || driver.current_url().await?.as_str() == "https://codeforces.com/enter" {
         times += 1;
         if times > 10 {
-            eprintln!("Too many times");
+            eprintln!("Cannot bypass cloudflare captcha, please submit manually");
             return Ok(vec![]);
         }
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -100,7 +100,7 @@ pub async fn submit(driver: &WebDriver, url: String, language: String, source: S
         if times > 10 {
             // driver.screenshot(&Path::new("cloudflare.png")).await?;
             // save_source(driver).await?;
-            eprintln!("Too many times");
+            eprintln!("Cannot bypass cloudflare captcha, please submit manually");
             return Ok(());
         }
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -129,7 +129,7 @@ pub async fn submit(driver: &WebDriver, url: String, language: String, source: S
     while is_cloudflare(driver).await? || driver.current_url().await?.as_str() == submit_url.as_str() {
         times += 1;
         if times > 10 {
-            eprintln!("Too many times");
+            eprintln!("Cannot bypass cloudflare captcha, please submit manually");
             return Ok(());
         }
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
