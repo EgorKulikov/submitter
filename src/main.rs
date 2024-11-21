@@ -24,6 +24,7 @@ async fn main() -> WebDriverResult<()> {
     let source = read_to_string(file).unwrap();
 
     let caps = DesiredCapabilities::chrome();
+
     let driver = match WebDriver::new("http://localhost:4444", caps.clone()).await {
         Ok(driver) => driver,
         Err(_) => {
@@ -138,5 +139,10 @@ async fn select_value(selector: WebElement, value: &str) -> WebDriverResult<bool
 
 async fn set_value(driver: &WebDriver, element: WebElement, value: String) -> WebDriverResult<()> {
     driver.execute("arguments[0].value = arguments[1];", vec![element.to_json()?, serde_json::to_value(value).unwrap()]).await?;
+    Ok(())
+}
+
+async fn save_source(driver: &WebDriver) -> WebDriverResult<()> {
+    std::fs::write("source.txt", driver.source().await?).unwrap();
     Ok(())
 }

@@ -2,11 +2,32 @@ use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
 use dialoguer::{Input, Password};
+use rand::{thread_rng, Rng};
 use thirtyfour::error::WebDriverResult;
 use thirtyfour::{By, Cookie, WebDriver};
 
 async fn is_cloudflare(driver: &WebDriver) -> WebDriverResult<bool> {
-    Ok(driver.title().await?.as_str() == "Just a moment..." || driver.source().await?.contains("<body><p>Please wait. Your browser is being checked. It may take a few seconds...</p>"))
+    let result = driver.title().await?.as_str() == "Just a moment..." || driver.source().await?.contains("<body><p>Please wait. Your browser is being checked. It may take a few seconds...</p>");
+    if driver.source().await?.contains("Verify you are human by completing the action below.") {
+        println!("Captcha, trying to pass. Consider submitting manually");
+        let mut x = thread_rng().gen_range(20i64..120);
+        let mut y = thread_rng().gen_range(200i64..350);
+        while (x - 53).abs() > 5 || (y - 291).abs() > 5 {
+            driver.action_chain().move_to(x, y).perform().await?;
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            loop {
+                let nx = x + thread_rng().gen_range(-5..5);
+                let ny = y + thread_rng().gen_range(-5..5);
+                if (nx - 53).abs() + (ny - 291).abs() < (x - 53).abs() + (y - 291).abs() {
+                    x = nx;
+                    y = ny;
+                    break;
+                }
+            }
+        }
+        driver.action_chain().move_to(x, y).click().perform().await?;
+    }
+    Ok(result)
 }
 
 pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<Vec<Cookie>> {
@@ -77,6 +98,8 @@ pub async fn submit(driver: &WebDriver, url: String, language: String, source: S
     while is_cloudflare(driver).await? {
         times += 1;
         if times > 10 {
+            // driver.screenshot(&Path::new("cloudflare.png")).await?;
+            // save_source(driver).await?;
             eprintln!("Too many times");
             return Ok(());
         }

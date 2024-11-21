@@ -3,9 +3,6 @@ use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
 use dialoguer::{Input, Password};
-use std::fs::File;
-use std::io::Write;
-use std::path::Path;
 use thirtyfour::error::{WebDriverError, WebDriverResult};
 use thirtyfour::{By, Cookie, Key, WebDriver};
 
@@ -33,8 +30,6 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
     driver.find(By::Id("passp-field-passwd")).await?.send_keys(password).await?;
     driver.find(By::Id("passp:sign-in")).await?.click().await?;
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-    File::create("source.txt").unwrap().write_all(driver.source().await?.as_bytes()).unwrap();
-    driver.screenshot(Path::new("screenshot.png")).await?;
     let confirmation: String = Input::with_theme(&dialoguer::theme::ColorfulTheme::default())
         .with_prompt("Enter your confirmation code from email")
         .interact_on(&Term::stdout())
@@ -76,8 +71,6 @@ pub async fn submit(driver: &WebDriver, url: String, language: String, source: S
     driver.action_chain().send_keys(Key::PageDown).perform().await?;
     driver.find(By::ClassName("problem__send")).await?.find(By::Tag("button")).await?.click().await?;
     tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
-    // driver.screenshot(Path::new("screenshot.png")).await?;
-    File::create("source.txt").unwrap().write_all(driver.source().await?.as_bytes()).unwrap();
     let mut last_verdict = "".to_string();
     loop {
         match single_iteration(driver, &mut last_verdict).await {
