@@ -15,7 +15,7 @@ use which::which;
 async fn main() -> WebDriverResult<()> {
     let args: Vec<_> = env::args().collect();
     if args.len() != 4 {
-        println!("Usage: cfsubmitter <url> <language> <file>");
+        println!("Usage: submitter <url> <language> <file>");
         return Ok(());
     }
     let url = &args[1];
