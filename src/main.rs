@@ -1,6 +1,7 @@
 mod codeforces;
 mod codechef;
 mod yandex;
+mod atcoder;
 
 use regex::Regex;
 use std::collections::HashMap;
@@ -70,6 +71,7 @@ async fn run(driver: &WebDriver, url: &String, language: &String, source: &Strin
         "codeforces.com" => Site::Codeforces,
         "codechef.com" => Site::Codechef,
         "contest.yandex.com" => Site::Yandex,
+        "atcoder.jp" => Site::AtCoder,
         _ => {
             println!("Unsupported domain");
             return Ok(());
@@ -91,6 +93,7 @@ enum Site {
     Codeforces,
     Codechef,
     Yandex,
+    AtCoder,
 }
 
 impl Site {
@@ -99,6 +102,7 @@ impl Site {
             Site::Codeforces => codeforces::submit(driver, url, language, source).await,
             Site::Codechef => codechef::submit(driver, url, language, source).await,
             Site::Yandex => yandex::submit(driver, url, language, source).await,
+            Site::AtCoder => atcoder::submit(driver, url, language, source).await,
         }
     }
 
@@ -107,6 +111,7 @@ impl Site {
             Site::Codeforces => codeforces::login(driver, cookies).await,
             Site::Codechef => codechef::login(driver, cookies).await,
             Site::Yandex => yandex::login(driver, cookies).await,
+            Site::AtCoder => atcoder::login(driver, cookies).await,
         }
     }
 }
@@ -142,7 +147,20 @@ async fn set_value(driver: &WebDriver, element: WebElement, value: String) -> We
     Ok(())
 }
 
+#[allow(dead_code)]
 async fn save_source(driver: &WebDriver) -> WebDriverResult<()> {
     std::fs::write("source.txt", driver.source().await?).unwrap();
     Ok(())
+}
+
+fn clear(len: usize) {
+    for _ in 0..len {
+        print!("{}", 8u8 as char);
+    }
+    for _ in 0..len {
+        print!(" ");
+    }
+    for _ in 0..len {
+        print!("{}", 8u8 as char);
+    }
 }

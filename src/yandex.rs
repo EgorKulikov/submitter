@@ -1,4 +1,4 @@
-use crate::set_value;
+use crate::{clear, set_value};
 use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
@@ -124,15 +124,7 @@ async fn single_iteration(driver: &WebDriver, last_verdict: &mut String) -> WebD
     if test.as_str() != "-" {
         verdict += &format!(" on test {}", test);
     }
-    for _ in 0..last_verdict.len() {
-        print!("{}", 8u8 as char);
-    }
-    for _ in 0..last_verdict.len() {
-        print!(" ");
-    }
-    for _ in 0..last_verdict.len() {
-        print!("{}", 8u8 as char);
-    }
+    clear(last_verdict.len());
     let mut stdout = std::io::stdout();
     let _ = execute!(stdout, SetForegroundColor(
             if !is_done {

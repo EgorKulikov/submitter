@@ -1,3 +1,4 @@
+use crate::clear;
 use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
@@ -175,15 +176,7 @@ pub async fn submit(driver: &WebDriver, url: String, language: String, source: S
         };
         let verdict = rem[..=pos].to_string();
         let (verdict, is_accepted) = extract_verdict(&verdict);
-        for _ in 0..last_verdict.len() {
-            print!("{}", 8u8 as char);
-        }
-        for _ in 0..last_verdict.len() {
-            print!(" ");
-        }
-        for _ in 0..last_verdict.len() {
-            print!("{}", 8u8 as char);
-        }
+        clear(last_verdict.len());
         if verdict == last_verdict && is_waiting {
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             driver.refresh().await?;

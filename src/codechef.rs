@@ -1,3 +1,4 @@
+use crate::clear;
 use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
@@ -62,15 +63,7 @@ pub async fn submit(driver: &WebDriver, url: String, language: String, source: S
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             continue;
         }
-        for _ in 0..7 {
-            print!("{}", 8u8 as char);
-        }
-        for _ in 0..7 {
-            print!(" ");
-        }
-        for _ in 0..7 {
-            print!("{}", 8u8 as char);
-        }
+        clear(7);
         let full_verdict = verdict.find(By::Tag("span")).await?.text().await?;
         let accepted = full_verdict.contains("Correct Answer");
         let _ = execute!(stdout, SetForegroundColor(if accepted { Color::Green } else { Color::Red }));
