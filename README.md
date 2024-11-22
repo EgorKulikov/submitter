@@ -21,9 +21,9 @@ At the moment following is supported:
 - Codefoces
 - Codechef
 - Yandex Contest
+- AtCoder
 
 Short term plans:
 
-- AtCoder
 - Universal Cup
 - Luogo
