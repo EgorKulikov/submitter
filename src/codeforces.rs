@@ -42,6 +42,7 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
         }
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
+    driver.delete_all_cookies().await?;
     for cookie in cookies {
         driver.add_cookie(cookie).await?;
     }

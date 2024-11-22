@@ -2,6 +2,7 @@ mod codeforces;
 mod codechef;
 mod yandex;
 mod atcoder;
+mod ucup;
 
 use regex::Regex;
 use std::collections::HashMap;
@@ -72,6 +73,7 @@ async fn run(driver: &WebDriver, url: &String, language: &String, source: &Strin
         "codechef.com" => Site::Codechef,
         "contest.yandex.com" => Site::Yandex,
         "atcoder.jp" => Site::AtCoder,
+        "contest.ucup.ac" => Site::UniversalCup,
         _ => {
             println!("Unsupported domain");
             return Ok(());
@@ -94,6 +96,7 @@ enum Site {
     Codechef,
     Yandex,
     AtCoder,
+    UniversalCup,
 }
 
 impl Site {
@@ -103,6 +106,7 @@ impl Site {
             Site::Codechef => codechef::submit(driver, url, language, source).await,
             Site::Yandex => yandex::submit(driver, url, language, source).await,
             Site::AtCoder => atcoder::submit(driver, url, language, source).await,
+            Site::UniversalCup => ucup::submit(driver, url, language, source).await,
         }
     }
 
@@ -112,6 +116,7 @@ impl Site {
             Site::Codechef => codechef::login(driver, cookies).await,
             Site::Yandex => yandex::login(driver, cookies).await,
             Site::AtCoder => atcoder::login(driver, cookies).await,
+            Site::UniversalCup => ucup::login(driver, cookies).await,
         }
     }
 }
