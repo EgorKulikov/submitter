@@ -100,8 +100,6 @@ pub async fn submit(driver: &WebDriver, url: String, language: String, source: S
     while is_cloudflare(driver).await? {
         times += 1;
         if times > 10 {
-            // driver.screenshot(&Path::new("cloudflare.png")).await?;
-            // save_source(driver).await?;
             eprintln!("Cannot bypass cloudflare captcha, please submit manually");
             return Ok(());
         }

@@ -3,6 +3,7 @@ mod codechef;
 mod yandex;
 mod atcoder;
 mod ucup;
+mod luogo;
 
 use regex::Regex;
 use std::collections::HashMap;
@@ -44,7 +45,7 @@ async fn main() -> WebDriverResult<()> {
         }
     };
 
-    driver.set_page_load_timeout(Duration::from_secs(10)).await?;
+    driver.set_page_load_timeout(Duration::from_secs(20)).await?;
 
     run(&driver, &url, &language, &source).await?;
 
@@ -74,6 +75,7 @@ async fn run(driver: &WebDriver, url: &String, language: &String, source: &Strin
         "contest.yandex.com" => Site::Yandex,
         "atcoder.jp" => Site::AtCoder,
         "contest.ucup.ac" => Site::UniversalCup,
+        "luogu.com.cn" => Site::Luogo,
         _ => {
             println!("Unsupported domain");
             return Ok(());
@@ -97,6 +99,7 @@ enum Site {
     Yandex,
     AtCoder,
     UniversalCup,
+    Luogo,
 }
 
 impl Site {
@@ -107,6 +110,7 @@ impl Site {
             Site::Yandex => yandex::submit(driver, url, language, source).await,
             Site::AtCoder => atcoder::submit(driver, url, language, source).await,
             Site::UniversalCup => ucup::submit(driver, url, language, source).await,
+            Site::Luogo => luogo::submit(driver, url, language, source).await,
         }
     }
 
@@ -117,6 +121,7 @@ impl Site {
             Site::Yandex => yandex::login(driver, cookies).await,
             Site::AtCoder => atcoder::login(driver, cookies).await,
             Site::UniversalCup => ucup::login(driver, cookies).await,
+            Site::Luogo => luogo::login(driver, cookies).await,
         }
     }
 }
