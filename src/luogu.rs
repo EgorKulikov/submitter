@@ -119,21 +119,25 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
                 pending += 1;
                 cur.push("Judging".to_string());
             } else {
-                let verdict = test.find(By::ClassName("status")).await?.text().await?;
-                verdicts.insert(verdict.clone());
-                cur.push(verdict);
+                let verdict = test.find(By::ClassName("status")).await?.text().await?.trim().to_string();
+                if verdict != "AC" && !verdict.is_empty() {
+                    verdicts.insert(verdict.clone());
+                }
+                if verdict.is_empty() {
+                    pending += 1;
+                    cur.push("Judging".to_string());
+                } else {
+                    cur.push(verdict);
+                }
             }
         }
         cards.push((name, cur));
     }
     let (mut verdict, color) = if total == 0 {
         ("Waiting".to_string(), Color::Yellow)
-    } else if verdicts.len() > 1 || verdicts.iter().next() != Some(&"AC".to_string()) {
+    } else if !verdicts.is_empty() {
         let mut all = String::new();
         for verdict in &verdicts {
-            if verdict == "AC" {
-                continue;
-            }
             if !all.is_empty() {
                 all.push_str(", ");
             }
@@ -143,7 +147,7 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
     } else if pending != 0 {
         ("Judging".to_string(), Color::Yellow)
     } else {
-        ("AC".to_string(), Color::Green)
+        ("Accepted".to_string(), Color::Green)
     };
     if pending != 0 {
         verdict += &format!(" {}/{}", total - pending, total);
@@ -161,7 +165,7 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
             for test in tests {
                 print!("  Test #{}: ", id);
                 id += 1;
-                let _ = execute!(stdout, SetForegroundColor(if test == "AC" { Color::Green } else { Color::Red }));
+                let _ = execute!(stdout, SetForegroundColor(if &test == "AC" { Color::Green } else { Color::Red }));
                 println!("{}", test);
                 let _ = execute!(stdout, ResetColor);
             }
