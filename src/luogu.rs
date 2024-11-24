@@ -145,14 +145,13 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
     } else {
         ("AC".to_string(), Color::Green)
     };
+    if pending != 0 {
+        verdict += &format!(" {}/{}", total - pending, total);
+    }
     clear(last_verdict.len());
     let mut stdout = std::io::stdout();
     let _ = execute!(stdout, SetForegroundColor(color));
     print!("{}", verdict);
-    if pending != 0 {
-        verdict += &format!(" {}/{}", total - pending, total);
-        print!(" {}/{}", total - pending, total);
-    }
     let _ = execute!(stdout, ResetColor);
     if total != 0 && pending == 0 {
         println!();

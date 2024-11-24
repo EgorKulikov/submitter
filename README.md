@@ -27,4 +27,4 @@ At the moment following is supported:
 - Yandex Contest
 - AtCoder
 - Universal Cup
-- Luogo (no support for changing language, language of last submit is used)
+- Luogu (no support for changing language, language of last submit is used)
