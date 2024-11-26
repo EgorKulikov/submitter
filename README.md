@@ -22,7 +22,7 @@ submitter <task url> <language> <path to solution>
 
 At the moment the following is supported:
 
-- Codefoces
+- Codeforces
 - Codechef
 - Yandex Contest
 - AtCoder
