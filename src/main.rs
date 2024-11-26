@@ -4,6 +4,7 @@ mod yandex;
 mod atcoder;
 mod ucup;
 mod luogu;
+mod tlx;
 
 use regex::Regex;
 use std::collections::HashMap;
@@ -26,7 +27,9 @@ async fn main() -> WebDriverResult<()> {
     let file = &args[3];
     let source = read_to_string(file).unwrap();
 
-    let caps = DesiredCapabilities::chrome();
+    let mut caps = DesiredCapabilities::chrome();
+    caps.set_web_storage_enabled(true)?;
+    caps.unset_disable_local_storage()?;
 
     let driver = match WebDriver::new("http://localhost:4444", caps.clone()).await {
         Ok(driver) => driver,
@@ -76,6 +79,7 @@ async fn run(driver: &WebDriver, url: &String, language: &String, source: &Strin
         "atcoder.jp" => Site::AtCoder,
         "contest.ucup.ac" => Site::UniversalCup,
         "luogu.com.cn" => Site::Luogu,
+        "tlx.toki.id" => Site::Tlx,
         _ => {
             println!("Unsupported domain");
             return Ok(());
@@ -85,7 +89,6 @@ async fn run(driver: &WebDriver, url: &String, language: &String, source: &Strin
     println!("Logging in");
     let cookies = site.login(&driver, all_cookies.get(&domain).cloned().unwrap_or(vec![])).await?;
     all_cookies.insert(domain, cookies.clone());
-    println!("Logged in, saving cookies");
     let cookies_string = serde_json::to_string(&all_cookies).unwrap();
     std::fs::write("cookies.json", cookies_string).unwrap();
     println!("Submitting");
@@ -100,6 +103,7 @@ enum Site {
     AtCoder,
     UniversalCup,
     Luogu,
+    Tlx,
 }
 
 impl Site {
@@ -111,6 +115,7 @@ impl Site {
             Site::AtCoder => atcoder::submit(driver, url, language, source).await,
             Site::UniversalCup => ucup::submit(driver, url, language, source).await,
             Site::Luogu => luogu::submit(driver, url, language, source).await,
+            Site::Tlx => tlx::submit(driver, url, language, source).await,
         }
     }
 
@@ -122,6 +127,7 @@ impl Site {
             Site::AtCoder => atcoder::login(driver, cookies).await,
             Site::UniversalCup => ucup::login(driver, cookies).await,
             Site::Luogu => luogu::login(driver, cookies).await,
+            Site::Tlx => tlx::login(driver, cookies).await,
         }
     }
 }
@@ -159,7 +165,7 @@ async fn set_value(driver: &WebDriver, element: WebElement, value: String) -> We
 
 #[allow(dead_code)]
 async fn save_source(driver: &WebDriver) -> WebDriverResult<()> {
-    std::fs::write("source.txt", driver.source().await?).unwrap();
+    std::fs::write("source.html", driver.source().await?).unwrap();
     Ok(())
 }
 
