@@ -3,59 +3,39 @@ use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
 use dialoguer::{Input, Password};
-use rand::{thread_rng, Rng};
-use thirtyfour::error::WebDriverResult;
+use thirtyfour::error::{WebDriverError, WebDriverResult};
 use thirtyfour::{By, Cookie, WebDriver};
 
 async fn is_cloudflare(driver: &WebDriver) -> WebDriverResult<bool> {
-    let result = driver.title().await?.as_str() == "Just a moment..." || driver.source().await?.contains("<body><p>Please wait. Your browser is being checked. It may take a few seconds...</p>");
-    if driver.source().await?.contains("Verify you are human by completing the action below.") {
-        println!("Captcha, trying to pass. Consider submitting manually");
-        let mut x = thread_rng().gen_range(20i64..120);
-        let mut y = thread_rng().gen_range(200i64..350);
-        while (x - 53).abs() > 5 || (y - 291).abs() > 5 {
-            driver.action_chain().move_to(x, y).perform().await?;
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-            loop {
-                let nx = x + thread_rng().gen_range(-5..5);
-                let ny = y + thread_rng().gen_range(-5..5);
-                if (nx - 53).abs() + (ny - 291).abs() < (x - 53).abs() + (y - 291).abs() {
-                    x = nx;
-                    y = ny;
-                    break;
-                }
-            }
-        }
-        driver.action_chain().move_to(x, y).click().perform().await?;
-    }
-    Ok(result)
+    Ok(driver.source().await?.contains(
+        "<body><p>Please wait. Your browser is being checked. It may take a few seconds...</p>",
+    ))
 }
 
-pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<Vec<Cookie>> {
-    driver.goto("https://codeforces.com/").await?;
+async fn skip_cloudflare(driver: &WebDriver) -> WebDriverResult<()> {
     let mut times = 0;
     while is_cloudflare(driver).await? {
         times += 1;
-        if times > 10 {
+        if times == 10 {
             eprintln!("Cannot bypass cloudflare captcha, please submit manually");
-            return Ok(vec![]);
+            return Err(WebDriverError::ParseError(
+                "Cannot bypass cloudflare captcha".to_string(),
+            ));
         }
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
+    Ok(())
+}
+
+pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<Vec<Cookie>> {
+    driver.goto("https://mirror.codeforces.com/").await?;
     driver.delete_all_cookies().await?;
     for cookie in cookies {
         driver.add_cookie(cookie).await?;
     }
-    driver.goto("https://codeforces.com/enter").await?;
-    while is_cloudflare(driver).await? {
-        times += 1;
-        if times > 1 {
-            // eprintln!("Cannot bypass cloudflare captcha, please submit manually");
-            return Ok(driver.get_all_cookies().await?);
-        }
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    }
-    if driver.current_url().await?.as_str() != "https://codeforces.com/enter" {
+    driver.goto("https://mirror.codeforces.com/enter").await?;
+    skip_cloudflare(driver).await?;
+    if driver.current_url().await?.as_str() != "https://mirror.codeforces.com/enter" {
         return Ok(driver.get_all_cookies().await?);
     }
     let login: String = Input::with_theme(&dialoguer::theme::ColorfulTheme::default())
@@ -66,22 +46,29 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
         .with_prompt("Enter your codeforces password")
         .interact_on(&Term::stdout())
         .unwrap();
-    driver.find(By::Id("handleOrEmail")).await?.send_keys(login).await?;
-    driver.find(By::Id("password")).await?.send_keys(password).await?;
+    driver
+        .find(By::Id("handleOrEmail"))
+        .await?
+        .send_keys(login)
+        .await?;
+    driver
+        .find(By::Id("password"))
+        .await?
+        .send_keys(password)
+        .await?;
     driver.find(By::Id("remember")).await?.click().await?;
     driver.find(By::ClassName("submit")).await?.click().await?;
-    while is_cloudflare(driver).await? || driver.current_url().await?.as_str() == "https://codeforces.com/enter" {
-        times += 1;
-        if times > 10 {
-            eprintln!("Cannot bypass cloudflare captcha, please submit manually");
-            return Ok(vec![]);
-        }
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    }
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    skip_cloudflare(driver).await?;
     Ok(driver.get_all_cookies().await?)
 }
 
-pub async fn submit(driver: &WebDriver, url: String, language: String, source: String) -> WebDriverResult<()> {
+pub async fn submit(
+    driver: &WebDriver,
+    url: String,
+    language: String,
+    source: String,
+) -> WebDriverResult<()> {
     let pos = match url.rfind("/problem/") {
         None => {
             eprintln!("Bad url");
@@ -91,20 +78,12 @@ pub async fn submit(driver: &WebDriver, url: String, language: String, source: S
     };
     let id = url[pos + 9..].replace("/", "");
     let submit_url = if url.contains("problemset") {
-        "https://codeforces.com/problemset/submit".to_string()
+        "https://mirror.codeforces.com/problemset/submit".to_string()
     } else {
-        url[..pos].to_string() + "/submit"
+        url[..pos].replace("https://codeforces.com", "https://mirror.codeforces.com") + "/submit"
     };
     driver.goto(&submit_url).await?;
-    let mut times = 0;
-    while is_cloudflare(driver).await? {
-        times += 1;
-        if times > 10 {
-            eprintln!("Cannot bypass cloudflare captcha, please submit manually");
-            return Ok(());
-        }
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    }
+    skip_cloudflare(driver).await?;
     match driver.find(By::Name("submittedProblemCode")).await {
         Ok(element) => {
             element.send_keys(id).await?;
@@ -122,19 +101,22 @@ pub async fn submit(driver: &WebDriver, url: String, language: String, source: S
         eprintln!("Bad language");
         return Ok(());
     }
-    driver.find(By::Id("toggleEditorCheckbox")).await?.click().await?;
+    driver
+        .find(By::Id("toggleEditorCheckbox"))
+        .await?
+        .click()
+        .await?;
     let input_field = driver.find(By::Id("sourceCodeTextarea")).await?;
     crate::set_value(driver, input_field, source).await?;
     driver.find(By::ClassName("submit")).await?.click().await?;
-    while is_cloudflare(driver).await? || driver.current_url().await?.as_str() == submit_url.as_str() {
-        times += 1;
-        if times > 10 {
-            eprintln!("Cannot bypass cloudflare captcha, please submit manually");
-            return Ok(());
-        }
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    }
-    if driver.current_url().await?.as_str().starts_with(&submit_url) {
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    skip_cloudflare(driver).await?;
+    if driver
+        .current_url()
+        .await?
+        .as_str()
+        .starts_with(&submit_url)
+    {
         eprintln!("You already submitted this code");
         return Ok(());
     }
@@ -179,18 +161,20 @@ pub async fn submit(driver: &WebDriver, url: String, language: String, source: S
         if verdict == last_verdict && is_waiting {
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             driver.refresh().await?;
+            skip_cloudflare(driver).await?;
             continue;
         }
         let mut stdout = std::io::stdout();
-        let _ = execute!(stdout, SetForegroundColor(
-            if is_waiting {
+        let _ = execute!(
+            stdout,
+            SetForegroundColor(if is_waiting {
                 Color::Yellow
             } else if is_accepted {
                 Color::Green
             } else {
                 Color::Red
-            }
-        ));
+            })
+        );
         print!("{}", verdict);
         let _ = execute!(stdout, ResetColor);
         if !is_waiting {
