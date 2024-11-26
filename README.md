@@ -2,7 +2,7 @@
 
 Tool to submit to online judges dirrectly from command line
 
-## Prerequesties
+## Prerequisites
 
 You would need [rust](https://www.rust-lang.org/tools/install) and [docker](https://docs.docker.com/desktop/)
 
@@ -20,11 +20,11 @@ submitter <task url> <language> <path to solution>
 
 ## Supported sites
 
-At the moment following is supported:
+At the moment the following is supported:
 
-- Codefoces
+- Codeforces
 - Codechef
 - Yandex Contest
 - AtCoder
 - Universal Cup
-- Luogu (no support for changing language, language of last submit is used)
+- Luogu (no support for changing language, language of the last submit is used)
