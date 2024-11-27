@@ -11,6 +11,7 @@ use thirtyfour::{By, Cookie, Key, WebDriver};
 
 pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<Vec<Cookie>> {
     driver.goto("https://codechef.com/").await?;
+    driver.delete_all_cookies().await?;
     for cookie in cookies {
         driver.add_cookie(cookie).await?;
     }
@@ -29,26 +30,52 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
         .with_prompt("Enter your codechef password")
         .interact_on(&Term::stdout())
         .unwrap();
-    driver.action_chain().send_keys(login).send_keys(Key::Tab).perform().await?;
-    driver.action_chain().send_keys(password).send_keys(Key::Tab).perform().await?;
+    driver
+        .action_chain()
+        .send_keys(login)
+        .send_keys(Key::Tab)
+        .perform()
+        .await?;
+    driver
+        .action_chain()
+        .send_keys(password)
+        .send_keys(Key::Tab)
+        .perform()
+        .await?;
     driver.action_chain().send_keys(" ").perform().await?;
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     Ok(driver.get_all_cookies().await?)
 }
 
-pub async fn submit(driver: &WebDriver, url: String, language: String, source: String) -> WebDriverResult<()> {
+pub async fn submit(
+    driver: &WebDriver,
+    url: String,
+    language: String,
+    source: String,
+) -> WebDriverResult<()> {
+    driver.maximize_window().await?;
     driver.goto(&url).await?;
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     let language_select = driver.find(By::Id("language-select")).await?;
     language_select.click().await?;
     driver.action_chain().send_keys(language).perform().await?;
     let center = language_select.rect().await?.icenter();
-    driver.action_chain().move_to(center.0, center.1 + 80).click().perform().await?;
-    driver.execute("\
+    driver
+        .action_chain()
+        .move_to(center.0, center.1 + 80)
+        .click()
+        .perform()
+        .await?;
+    driver
+        .execute(
+            "\
         var editordiv = document.getElementById(\"submit-ide-v2\");\
         var editor = ace.edit(editordiv);\
         editor.setValue(arguments[0]);\
-    ", vec![serde_json::to_value(source).unwrap()]).await?;
+    ",
+            vec![serde_json::to_value(source).unwrap()],
+        )
+        .await?;
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     driver.screenshot(Path::new("screenshot.png")).await?;
     driver.find(By::Id("submit_btn")).await?.click().await?;
@@ -66,10 +93,16 @@ pub async fn submit(driver: &WebDriver, url: String, language: String, source: S
         clear(7);
         let full_verdict = verdict.find(By::Tag("span")).await?.text().await?;
         let accepted = full_verdict.contains("Correct Answer");
-        let _ = execute!(stdout, SetForegroundColor(if accepted { Color::Green } else { Color::Red }));
+        let _ = execute!(
+            stdout,
+            SetForegroundColor(if accepted { Color::Green } else { Color::Red })
+        );
         println!("{}", full_verdict);
         let _ = execute!(stdout, ResetColor);
-        File::create("source.txt").unwrap().write_all(driver.source().await?.as_bytes()).unwrap();
+        File::create("source.txt")
+            .unwrap()
+            .write_all(driver.source().await?.as_bytes())
+            .unwrap();
         let table = loop {
             match driver.find(By::ClassName("status-table")).await {
                 Ok(table) => break table,
@@ -82,7 +115,9 @@ pub async fn submit(driver: &WebDriver, url: String, language: String, source: S
         let rows = table.find_all(By::Tag("tr")).await?;
         println!("Subtask Task Result");
         for row in rows.into_iter().skip(1) {
-            if row.class_name().await? == Some("skip".to_string()) || row.class_name().await? == Some("subtask-result".to_string()) {
+            if row.class_name().await? == Some("skip".to_string())
+                || row.class_name().await? == Some("subtask-result".to_string())
+            {
                 continue;
             }
             let is_accepted = row.class_name().await? == Some("correct".to_string());
@@ -92,8 +127,20 @@ pub async fn submit(driver: &WebDriver, url: String, language: String, source: S
             }
             let subtask = cells[0].text().await?;
             let task = cells[1].text().await?;
-            let result = cells[2].text().await?.replace("\n", "").replace("\"", "").replace("<br>", " ");
-            let _ = execute!(stdout, SetForegroundColor(if is_accepted { Color::Green } else { Color::Red }));
+            let result = cells[2]
+                .text()
+                .await?
+                .replace("\n", "")
+                .replace("\"", "")
+                .replace("<br>", " ");
+            let _ = execute!(
+                stdout,
+                SetForegroundColor(if is_accepted {
+                    Color::Green
+                } else {
+                    Color::Red
+                })
+            );
             println!("{:7} {:4} {}", subtask, task, result);
             let _ = execute!(stdout, ResetColor);
         }

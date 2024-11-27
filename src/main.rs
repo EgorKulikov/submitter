@@ -1,9 +1,10 @@
-mod codeforces;
-mod codechef;
-mod yandex;
 mod atcoder;
-mod ucup;
+mod codechef;
+mod codeforces;
 mod luogu;
+mod toph;
+mod ucup;
+mod yandex;
 
 use regex::Regex;
 use std::collections::HashMap;
@@ -37,7 +38,20 @@ async fn main() -> WebDriverResult<()> {
             }
             println!("Selenium is not running, starting");
             let mut command = Command::new("docker");
-            command.args(&["run", "--rm", "-d", "-p", "4444:4444", "-p", "5900:5900", "--name", "selenium-server", "-v", "//dev/shm:/dev/shm", "selenium/standalone-chrome:latest"]);
+            command.args(&[
+                "run",
+                "--rm",
+                "-d",
+                "-p",
+                "4444:4444",
+                "-p",
+                "5900:5900",
+                "--name",
+                "selenium-server",
+                "-v",
+                "//dev/shm:/dev/shm",
+                "selenium/standalone-chrome:latest",
+            ]);
             command.status().unwrap();
             println!("Waiting for selenium to start");
             tokio::time::sleep(Duration::from_secs(5)).await;
@@ -45,7 +59,9 @@ async fn main() -> WebDriverResult<()> {
         }
     };
 
-    driver.set_page_load_timeout(Duration::from_secs(20)).await?;
+    driver
+        .set_page_load_timeout(Duration::from_secs(20))
+        .await?;
 
     run(&driver, &url, &language, &source).await?;
 
@@ -53,9 +69,15 @@ async fn main() -> WebDriverResult<()> {
     Ok(())
 }
 
-async fn run(driver: &WebDriver, url: &String, language: &String, source: &String) -> WebDriverResult<()> {
+async fn run(
+    driver: &WebDriver,
+    url: &String,
+    language: &String,
+    source: &String,
+) -> WebDriverResult<()> {
     let cookies_string = std::fs::read_to_string("cookies.json").unwrap_or("{}".to_string());
-    let mut all_cookies: HashMap<String, Vec<Cookie>> = serde_json::from_str(&cookies_string).unwrap_or(HashMap::new());
+    let mut all_cookies: HashMap<String, Vec<Cookie>> =
+        serde_json::from_str(&cookies_string).unwrap_or(HashMap::new());
     let url_regex = Regex::new(r"https?://(?:www\.)?([^/]+).*").unwrap();
     let domain = {
         match url_regex.captures(url) {
@@ -63,11 +85,9 @@ async fn run(driver: &WebDriver, url: &String, language: &String, source: &Strin
                 println!("Unexpected URL");
                 return Ok(());
             }
-            Some(caps) =>
-                caps[1].to_string(),
+            Some(caps) => caps[1].to_string(),
         }
     };
-
 
     let site = match domain.as_str() {
         "codeforces.com" => Site::Codeforces,
@@ -76,6 +96,7 @@ async fn run(driver: &WebDriver, url: &String, language: &String, source: &Strin
         "atcoder.jp" => Site::AtCoder,
         "contest.ucup.ac" => Site::UniversalCup,
         "luogu.com.cn" => Site::Luogu,
+        "toph.co" => Site::Toph,
         _ => {
             println!("Unsupported domain");
             return Ok(());
@@ -83,13 +104,15 @@ async fn run(driver: &WebDriver, url: &String, language: &String, source: &Strin
     };
 
     println!("Logging in");
-    let cookies = site.login(&driver, all_cookies.get(&domain).cloned().unwrap_or(vec![])).await?;
+    let cookies = site
+        .login(&driver, all_cookies.get(&domain).cloned().unwrap_or(vec![]))
+        .await?;
     all_cookies.insert(domain, cookies.clone());
-    println!("Logged in, saving cookies");
     let cookies_string = serde_json::to_string(&all_cookies).unwrap();
     std::fs::write("cookies.json", cookies_string).unwrap();
     println!("Submitting");
-    site.submit(&driver, url.clone(), language.clone(), source.clone()).await?;
+    site.submit(&driver, url.clone(), language.clone(), source.clone())
+        .await?;
     Ok(())
 }
 
@@ -100,10 +123,17 @@ enum Site {
     AtCoder,
     UniversalCup,
     Luogu,
+    Toph,
 }
 
 impl Site {
-    async fn submit(&self, driver: &WebDriver, url: String, language: String, source: String) -> WebDriverResult<()> {
+    async fn submit(
+        &self,
+        driver: &WebDriver,
+        url: String,
+        language: String,
+        source: String,
+    ) -> WebDriverResult<()> {
         match self {
             Site::Codeforces => codeforces::submit(driver, url, language, source).await,
             Site::Codechef => codechef::submit(driver, url, language, source).await,
@@ -111,10 +141,15 @@ impl Site {
             Site::AtCoder => atcoder::submit(driver, url, language, source).await,
             Site::UniversalCup => ucup::submit(driver, url, language, source).await,
             Site::Luogu => luogu::submit(driver, url, language, source).await,
+            Site::Toph => toph::submit(driver, url, language, source).await,
         }
     }
 
-    async fn login(&self, driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<Vec<Cookie>> {
+    async fn login(
+        &self,
+        driver: &WebDriver,
+        cookies: Vec<Cookie>,
+    ) -> WebDriverResult<Vec<Cookie>> {
         match self {
             Site::Codeforces => codeforces::login(driver, cookies).await,
             Site::Codechef => codechef::login(driver, cookies).await,
@@ -122,6 +157,7 @@ impl Site {
             Site::AtCoder => atcoder::login(driver, cookies).await,
             Site::UniversalCup => ucup::login(driver, cookies).await,
             Site::Luogu => luogu::login(driver, cookies).await,
+            Site::Toph => toph::login(driver, cookies).await,
         }
     }
 }
@@ -153,13 +189,18 @@ async fn select_value(selector: WebElement, value: &str) -> WebDriverResult<bool
 }
 
 async fn set_value(driver: &WebDriver, element: WebElement, value: String) -> WebDriverResult<()> {
-    driver.execute("arguments[0].value = arguments[1];", vec![element.to_json()?, serde_json::to_value(value).unwrap()]).await?;
+    driver
+        .execute(
+            "arguments[0].value = arguments[1];",
+            vec![element.to_json()?, serde_json::to_value(value).unwrap()],
+        )
+        .await?;
     Ok(())
 }
 
 #[allow(dead_code)]
 async fn save_source(driver: &WebDriver) -> WebDriverResult<()> {
-    std::fs::write("source.txt", driver.source().await?).unwrap();
+    std::fs::write("source.html", driver.source().await?).unwrap();
     Ok(())
 }
 

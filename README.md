@@ -28,3 +28,4 @@ At the moment the following is supported:
 - AtCoder
 - Universal Cup
 - Luogu (no support for changing language, language of the last submit is used)
+- Toph (no support for changing language, language of the last submit is used)
