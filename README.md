@@ -30,4 +30,4 @@ At the moment the following is supported:
 - Luogu*
 - Toph*
   
-*no support for changing language, language of the last submit is used
+*no support for specifying language, language of the last submit is used
