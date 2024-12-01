@@ -154,12 +154,22 @@ pub async fn submit(
 }
 
 async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverResult<bool> {
+    let mut stdout = std::io::stdout();
     let cell = driver.find(By::ClassName("status-cell")).await?;
-    let verdict = cell.find(By::Tag("span")).await?;
-    let verdict_text = verdict.text().await?;
-    let is_waiting = verdict.class_name().await? == Some("verdict-waiting".to_string());
-    let is_accepted = verdict.class_name().await? == Some("verdict-accepted".to_string());
-    let verdict = verdict_text;
+    let verdict = cell.text().await?;
+    let (is_waiting, is_accepted) = match cell.find(By::Tag("span")).await {
+        Ok(verdict) => (
+            verdict.class_name().await? == Some("verdict-waiting".to_string()),
+            verdict.class_name().await? == Some("verdict-accepted".to_string()),
+        ),
+        Err(_) => {
+            if verdict.trim() == "Compilation error" {
+                (false, false)
+            } else {
+                (true, false)
+            }
+        }
+    };
     clear(last_verdict.len());
     if verdict == *last_verdict && is_waiting {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -167,7 +177,6 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
         skip_cloudflare(driver).await?;
         return Ok(false);
     }
-    let mut stdout = std::io::stdout();
     let _ = execute!(
         stdout,
         SetForegroundColor(if is_waiting {
