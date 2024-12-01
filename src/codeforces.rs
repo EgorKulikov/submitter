@@ -17,9 +17,10 @@ async fn skip_cloudflare(driver: &WebDriver) -> WebDriverResult<()> {
     let mut times = 0;
     while is_cloudflare(driver).await? {
         times += 1;
-        if times == 20 {
+        if times == 10 {
             driver.screenshot(&Path::new("screenshot.png")).await?;
             eprintln!("Cannot bypass cloudflare captcha, please submit manually");
+            eprintln!("Will clear cookies, may help");
             return Err(WebDriverError::ParseError(
                 "Cannot bypass cloudflare captcha".to_string(),
             ));

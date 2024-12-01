@@ -44,8 +44,6 @@ async fn main() -> WebDriverResult<()> {
                 "-d",
                 "-p",
                 "4444:4444",
-                "-p",
-                "5900:5900",
                 "--name",
                 "selenium-server",
                 "-v",
@@ -100,9 +98,20 @@ async fn run(
     };
 
     println!("Logging in");
-    let cookies = site
+    let cookies = match site
         .login(&driver, all_cookies.get(&domain).cloned().unwrap_or(vec![]))
-        .await?;
+        .await
+    {
+        Ok(cookies) => cookies,
+        Err(err) => match err {
+            WebDriverError::ParseError(_) => {
+                vec![]
+            }
+            _ => {
+                return Err(err);
+            }
+        },
+    };
     all_cookies.insert(domain, cookies.clone());
     let cookies_string = serde_json::to_string(&all_cookies).unwrap();
     std::fs::write("cookies.json", cookies_string).unwrap();
