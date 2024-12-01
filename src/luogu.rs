@@ -95,12 +95,18 @@ pub async fn submit(
         }
     }
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    let url = driver.current_url().await?.to_string();
-    if url.starts_with("https://www.luogu.com.cn/record/") {
-        println!("Submission url {}", url);
-    }
+    let mut url_printed = false;
     let mut last_verdict = "".to_string();
     loop {
+        if !url_printed {
+            let url = driver.current_url().await?.to_string();
+            if url.starts_with("https://www.luogu.com.cn/record/") {
+                clear(last_verdict.len());
+                last_verdict = String::new();
+                println!("Submission url {}", url);
+                url_printed = true;
+            }
+        }
         match iteration(driver, &mut last_verdict).await {
             Ok(true) => break,
             Err(err) => match err {
