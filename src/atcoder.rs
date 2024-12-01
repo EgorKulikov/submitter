@@ -14,7 +14,11 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
         driver.add_cookie(cookie).await?;
     }
     driver.goto("https://atcoder.jp/login").await?;
-    if !driver.source().await?.contains("var userScreenName = \"\";") {
+    if !driver
+        .source()
+        .await?
+        .contains("var userScreenName = \"\";")
+    {
         return Ok(driver.get_all_cookies().await?);
     }
     let login: String = Input::with_theme(&dialoguer::theme::ColorfulTheme::default())
@@ -25,49 +29,82 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
         .with_prompt("Enter your atcoder password")
         .interact_on(&Term::stdout())
         .unwrap();
-    driver.find(By::Id("username")).await?.send_keys(login).await?;
-    driver.find(By::Id("password")).await?.send_keys(password).await?;
+    driver
+        .find(By::Id("username"))
+        .await?
+        .send_keys(login)
+        .await?;
+    driver
+        .find(By::Id("password"))
+        .await?
+        .send_keys(password)
+        .await?;
     driver.find(By::Id("submit")).await?.click().await?;
     Ok(driver.get_all_cookies().await?)
 }
 
-pub async fn submit(driver: &WebDriver, url: String, language: String, source: String) -> WebDriverResult<()> {
+pub async fn submit(
+    driver: &WebDriver,
+    url: String,
+    language: String,
+    source: String,
+) -> WebDriverResult<()> {
     let regex = Regex::new(r#"https://atcoder.jp/contests/(\w+)/tasks/(\w+)"#).unwrap();
     let (contest_id, task_id) = match regex.captures(&url) {
         None => {
             println!("Invalid url");
             return Ok(());
         }
-        Some(caps) => {
-            (caps[1].to_string(), caps[2].to_string())
-        }
+        Some(caps) => (caps[1].to_string(), caps[2].to_string()),
     };
-    driver.goto(&format!("https://atcoder.jp/contests/{}/submit?taskScreenName={}", contest_id, task_id)).await?;
-    let (x, y) = driver.find(By::Name("data.LanguageId")).await?.rect().await?.icenter();
-    driver.action_chain().move_to(x + 10, y + 10).click().perform().await?;
+    driver
+        .goto(&format!(
+            "https://atcoder.jp/contests/{}/submit?taskScreenName={}",
+            contest_id, task_id
+        ))
+        .await?;
+    let (x, y) = driver
+        .find(By::Name("data.LanguageId"))
+        .await?
+        .rect()
+        .await?
+        .icenter();
+    driver
+        .action_chain()
+        .move_to(x + 10, y + 10)
+        .click()
+        .perform()
+        .await?;
     driver.action_chain().send_keys(language).perform().await?;
-    driver.action_chain().send_keys(Key::Enter).perform().await?;
-    driver.execute("\
+    driver
+        .action_chain()
+        .send_keys(Key::Enter)
+        .perform()
+        .await?;
+    driver
+        .execute(
+            "\
         var editordiv = document.getElementById(\"editor\");\
         var editor = ace.edit(editordiv);\
         editor.setValue(arguments[0]);\
-    ", vec![serde_json::to_value(source).unwrap()]).await?;
+    ",
+            vec![serde_json::to_value(source).unwrap()],
+        )
+        .await?;
     driver.find(By::Id("submit")).await?.click().await?;
     let mut last_verdict = "".to_string();
     loop {
         match iteration(driver, &mut last_verdict).await {
             Ok(true) => break,
-            Err(err) => {
-                match err {
-                    WebDriverError::StaleElementReference(_) => {
-                        continue;
-                    }
-                    _ => {
-                        println!("Error while checking verdict");
-                        break;
-                    }
+            Err(err) => match err {
+                WebDriverError::StaleElementReference(_) => {
+                    continue;
                 }
-            }
+                _ => {
+                    println!("Error while checking verdict");
+                    break;
+                }
+            },
             _ => {}
         }
     }
@@ -105,17 +142,28 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
     let class = class.unwrap();
     clear(last_verdict.len());
     let mut stdout = std::io::stdout();
-    let _ = execute!(stdout, SetForegroundColor(if class.contains("label-success") {
+    let _ = execute!(
+        stdout,
+        SetForegroundColor(if class.contains("label-success") {
             Color::Green
         } else if class.contains("label-default") {
             Color::Yellow
         } else {
             Color::Red
-        }));
+        })
+    );
     print!("{}", verdict);
     let _ = execute!(stdout, ResetColor);
-    if !verdict.contains("/") && !class.contains("label-default") {
+    if !class.contains("label-default") {
         println!();
+        if let Some(url) = driver
+            .find(By::ClassName("submission-details-link"))
+            .await?
+            .attr("href")
+            .await?
+        {
+            println!("Submission url https://atcoder.jp{}", url);
+        }
         return Ok(true);
     }
     *last_verdict = verdict;

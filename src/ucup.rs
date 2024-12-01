@@ -25,16 +25,33 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
         .with_prompt("Enter your universal cup password")
         .interact_on(&Term::stdout())
         .unwrap();
-    driver.find(By::Id("input-username")).await?.send_keys(login).await?;
-    driver.find(By::Id("input-password")).await?.send_keys(password).await?;
+    driver
+        .find(By::Id("input-username"))
+        .await?
+        .send_keys(login)
+        .await?;
+    driver
+        .find(By::Id("input-password"))
+        .await?
+        .send_keys(password)
+        .await?;
     driver.find(By::Id("button-submit")).await?.click().await?;
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     Ok(driver.get_all_cookies().await?)
 }
 
-pub async fn submit(driver: &WebDriver, url: String, language: String, source: String) -> WebDriverResult<()> {
+pub async fn submit(
+    driver: &WebDriver,
+    url: String,
+    language: String,
+    source: String,
+) -> WebDriverResult<()> {
     driver.goto(&url).await?;
-    driver.find(By::PartialLinkText("Submit")).await?.click().await?;
+    driver
+        .find(By::PartialLinkText("Submit"))
+        .await?
+        .click()
+        .await?;
     let language_selector = driver.find(By::Id("input-answer_answer_language")).await?;
     let options = language_selector.find_all(By::Tag("option")).await?;
     let mut result = "".to_string();
@@ -54,25 +71,25 @@ pub async fn submit(driver: &WebDriver, url: String, language: String, source: S
     let source_code = driver.find(By::Id("input-answer_answer_editor")).await?;
     set_value(driver, source_code, source).await?;
     driver.screenshot(&Path::new("screenshot.png")).await?;
-    driver.find(By::Id("button-submit-answer")).await?.click().await?;
+    driver
+        .find(By::Id("button-submit-answer"))
+        .await?
+        .click()
+        .await?;
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-    // driver.screenshot(&Path::new("screenshot.png")).await?;
-    // save_source(driver).await?;
     let mut last_verdict = "".to_string();
     loop {
         match iteration(driver, &mut last_verdict).await {
             Ok(true) => break,
-            Err(err) => {
-                match err {
-                    WebDriverError::StaleElementReference(_) => {
-                        continue;
-                    }
-                    _ => {
-                        println!("Error while checking verdict");
-                        break;
-                    }
+            Err(err) => match err {
+                WebDriverError::StaleElementReference(_) => {
+                    continue;
                 }
-            }
+                _ => {
+                    println!("Error while checking verdict");
+                    break;
+                }
+            },
             _ => {}
         }
     }
@@ -83,7 +100,11 @@ async fn iteration(driver: &WebDriver, last_submit: &mut String) -> WebDriverRes
     let mut stdout = std::io::stdout();
     match driver.find(By::ClassName("info")).await {
         Ok(info) => {
-            let verdict = info.find(By::ClassName("uoj-status-details-text-div")).await?.text().await?;
+            let verdict = info
+                .find(By::ClassName("uoj-status-details-text-div"))
+                .await?
+                .text()
+                .await?;
             clear(last_submit.len());
             let _ = execute!(stdout, SetForegroundColor(Color::Yellow));
             print!("{}", verdict);
@@ -92,15 +113,29 @@ async fn iteration(driver: &WebDriver, last_submit: &mut String) -> WebDriverRes
             Ok(false)
         }
         Err(_) => {
-            let verdict = driver.find(By::ClassName("uoj-score")).await?.text().await?;
+            let verdict = driver
+                .find(By::ClassName("uoj-score"))
+                .await?
+                .text()
+                .await?;
             clear(last_submit.len());
-            let _ = execute!(stdout, SetForegroundColor(if verdict.starts_with("AC") {
-                Color::Green
-            } else {
-                Color::Red
-            }));
+            let _ = execute!(
+                stdout,
+                SetForegroundColor(if verdict.starts_with("AC") {
+                    Color::Green
+                } else {
+                    Color::Red
+                })
+            );
             println!("{}", verdict);
             let _ = execute!(stdout, ResetColor);
+            let rows = driver.find_all(By::Tag("tr")).await?;
+            if rows.len() >= 2 {
+                let link = rows[1].find(By::Tag("a")).await?;
+                if let Some(link) = link.attr("href").await? {
+                    println!("Submission url https://contest.ucup.ac{}", link);
+                }
+            }
             Ok(true)
         }
     }

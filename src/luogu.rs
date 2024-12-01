@@ -55,20 +55,38 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
             }
         }
     }
-    driver.find(By::ClassName("btn-login")).await?.click().await?;
+    driver
+        .find(By::ClassName("btn-login"))
+        .await?
+        .click()
+        .await?;
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     Ok(driver.get_all_cookies().await?)
 }
 
-pub async fn submit(driver: &WebDriver, url: String, _language: String, source: String) -> WebDriverResult<()> {
+pub async fn submit(
+    driver: &WebDriver,
+    url: String,
+    _language: String,
+    source: String,
+) -> WebDriverResult<()> {
     println!("Cannot change language on luogo, language of last submit would be used");
     driver.goto(&url).await?;
-    driver.find(By::ClassName("lfe-form-sz-middle")).await?.click().await?;
-    driver.execute("\
+    driver
+        .find(By::ClassName("lfe-form-sz-middle"))
+        .await?
+        .click()
+        .await?;
+    driver
+        .execute(
+            "\
         var editordiv = document.getElementsByClassName(\"editor\")[0];\
         var editor = ace.edit(editordiv);\
         editor.setValue(arguments[0]);\
-    ", vec![serde_json::to_value(source).unwrap()]).await?;
+    ",
+            vec![serde_json::to_value(source).unwrap()],
+        )
+        .await?;
     let buttons = driver.find_all(By::Tag("button")).await?;
     for button in buttons {
         if button.text().await? == "提交评测" {
@@ -76,21 +94,24 @@ pub async fn submit(driver: &WebDriver, url: String, _language: String, source: 
             break;
         }
     }
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    let url = driver.current_url().await?.to_string();
+    if url.starts_with("https://www.luogu.com.cn/record/") {
+        println!("Submission url {}", url);
+    }
     let mut last_verdict = "".to_string();
     loop {
         match iteration(driver, &mut last_verdict).await {
             Ok(true) => break,
-            Err(err) => {
-                match err {
-                    WebDriverError::StaleElementReference(_) => {
-                        continue;
-                    }
-                    _ => {
-                        println!("Error while checking verdict");
-                        break;
-                    }
+            Err(err) => match err {
+                WebDriverError::StaleElementReference(_) => {
+                    continue;
                 }
-            }
+                _ => {
+                    println!("Error while checking verdict");
+                    break;
+                }
+            },
             _ => {}
         }
     }
@@ -98,6 +119,37 @@ pub async fn submit(driver: &WebDriver, url: String, _language: String, source: 
 }
 
 async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverResult<bool> {
+    if let Ok(content) = driver.find(By::Id("swal2-content")).await {
+        let content = content.inner_html().await?.trim().to_string();
+        if content.is_empty() {
+            return Ok(false);
+        }
+        println!("Error from luogo, probably code is too long: {}", content);
+        return Ok(true);
+    }
+    let (global_verdict, points) = if let Ok(side) = driver.find(By::ClassName("side")).await {
+        let spans = side.find_all(By::Tag("span")).await?;
+        let mut global_verdict = None;
+        let mut points = None;
+        for i in 0..spans.len() {
+            if spans[i].text().await?.contains("评测状态") {
+                global_verdict = Some(spans[i + 2].text().await?.trim().to_string());
+            }
+            if spans[i].text().await?.contains("评测分数") {
+                points = Some(spans[i + 3].text().await?.trim().to_string());
+            }
+        }
+        (global_verdict, points)
+    } else {
+        return Ok(false);
+    };
+    clear(last_verdict.len());
+    if global_verdict == Some("Compile Error".to_string()) {
+        let _ = execute!(std::io::stdout(), SetForegroundColor(Color::Red));
+        println!("Compile Error");
+        let _ = execute!(std::io::stdout(), ResetColor);
+        return Ok(true);
+    }
     let mut subtasks = driver.find_all(By::ClassName("test-case-wrap")).await?;
     if subtasks.is_empty() {
         subtasks = driver.find_all(By::ClassName("main")).await?;
@@ -119,7 +171,13 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
                 pending += 1;
                 cur.push("Judging".to_string());
             } else {
-                let verdict = test.find(By::ClassName("status")).await?.text().await?.trim().to_string();
+                let verdict = test
+                    .find(By::ClassName("status"))
+                    .await?
+                    .text()
+                    .await?
+                    .trim()
+                    .to_string();
                 if verdict != "AC" && !verdict.is_empty() {
                     verdicts.insert(verdict.clone());
                 }
@@ -152,7 +210,9 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
     if pending != 0 {
         verdict += &format!(" {}/{}", total - pending, total);
     }
-    clear(last_verdict.len());
+    if let Some(points) = points {
+        verdict += &format!(" ({} pts)", points);
+    }
     let mut stdout = std::io::stdout();
     let _ = execute!(stdout, SetForegroundColor(color));
     print!("{}", verdict);
@@ -165,7 +225,14 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
             for test in tests {
                 print!("  Test #{}: ", id);
                 id += 1;
-                let _ = execute!(stdout, SetForegroundColor(if &test == "AC" { Color::Green } else { Color::Red }));
+                let _ = execute!(
+                    stdout,
+                    SetForegroundColor(if &test == "AC" {
+                        Color::Green
+                    } else {
+                        Color::Red
+                    })
+                );
                 println!("{}", test);
                 let _ = execute!(stdout, ResetColor);
             }

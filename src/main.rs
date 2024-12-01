@@ -59,10 +59,6 @@ async fn main() -> WebDriverResult<()> {
         }
     };
 
-    driver
-        .set_page_load_timeout(Duration::from_secs(20))
-        .await?;
-
     run(&driver, &url, &language, &source).await?;
 
     driver.quit().await?;
@@ -75,7 +71,7 @@ async fn run(
     language: &String,
     source: &String,
 ) -> WebDriverResult<()> {
-    let cookies_string = std::fs::read_to_string("cookies.json").unwrap_or("{}".to_string());
+    let cookies_string = read_to_string("cookies.json").unwrap_or("{}".to_string());
     let mut all_cookies: HashMap<String, Vec<Cookie>> =
         serde_json::from_str(&cookies_string).unwrap_or(HashMap::new());
     let url_regex = Regex::new(r"https?://(?:www\.)?([^/]+).*").unwrap();

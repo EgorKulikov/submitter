@@ -1,8 +1,9 @@
-use crate::clear;
+use crate::{clear, save_source};
 use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
 use dialoguer::{Input, Password};
+use std::path::Path;
 use thirtyfour::error::{WebDriverError, WebDriverResult};
 use thirtyfour::{By, Cookie, WebDriver};
 
@@ -16,7 +17,8 @@ async fn skip_cloudflare(driver: &WebDriver) -> WebDriverResult<()> {
     let mut times = 0;
     while is_cloudflare(driver).await? {
         times += 1;
-        if times == 10 {
+        if times == 20 {
+            driver.screenshot(&Path::new("screenshot.png")).await?;
             eprintln!("Cannot bypass cloudflare captcha, please submit manually");
             return Err(WebDriverError::ParseError(
                 "Cannot bypass cloudflare captcha".to_string(),
@@ -117,95 +119,73 @@ pub async fn submit(
         .as_str()
         .starts_with(&submit_url)
     {
-        eprintln!("You already submitted this code");
+        save_source(driver).await?;
+        driver.screenshot(&Path::new("screenshot.png")).await?;
+        let error = driver.find_all(By::ClassName("error")).await?;
+        eprintln!("Error submitting: ");
+        for element in error {
+            eprint!("{}", element.text().await?);
+        }
         return Ok(());
     }
     let mut last_verdict = "".to_string();
     loop {
-        let source = driver.source().await?;
-        let pos = match source.find("\"status-cell status-small status-verdict-cell") {
-            None => {
-                eprintln!("Cannot fetch verdict");
-                return Ok(());
+        match iteration(driver, &mut last_verdict).await {
+            Ok(res) => {
+                if res {
+                    break;
+                }
             }
-            Some(pos) => pos,
-        };
-        let rem = &source[pos..];
-        let pos = match rem.find("waiting=\"") {
-            None => {
-                eprintln!("Cannot fetch verdict");
-                return Ok(());
-            }
-            Some(pos) => pos + 9,
-        };
-        let rem = &rem[pos..];
-        let is_waiting = rem.starts_with("true");
-        let pos = match rem.find(">") {
-            None => {
-                eprintln!("Cannot fetch verdict");
-                return Ok(());
-            }
-            Some(pos) => pos + 1,
-        };
-        let rem = &rem[pos..];
-        let pos = match rem[pos..].find("</td>") {
-            None => {
-                eprintln!("Cannot fetch verdict");
-                return Ok(());
-            }
-            Some(pos) => pos,
-        };
-        let verdict = rem[..=pos].to_string();
-        let (verdict, is_accepted) = extract_verdict(&verdict);
-        clear(last_verdict.len());
-        if verdict == last_verdict && is_waiting {
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-            driver.refresh().await?;
-            skip_cloudflare(driver).await?;
-            continue;
+            Err(err) => match err {
+                WebDriverError::NoSuchElement(_) => {}
+                WebDriverError::StaleElementReference(_) => {}
+                _ => {
+                    return Err(err);
+                }
+            },
         }
-        let mut stdout = std::io::stdout();
-        let _ = execute!(
-            stdout,
-            SetForegroundColor(if is_waiting {
-                Color::Yellow
-            } else if is_accepted {
-                Color::Green
-            } else {
-                Color::Red
-            })
-        );
-        print!("{}", verdict);
-        let _ = execute!(stdout, ResetColor);
-        if !is_waiting {
-            println!();
-            break;
-        }
-        last_verdict = verdict;
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+    let id_cell = driver.find(By::ClassName("id-cell")).await?;
+    if let Some(link) = id_cell.find(By::Tag("a")).await?.attr("href").await? {
+        println!("Submission url https://codeforces.com{}", link);
     }
     Ok(())
 }
 
-fn extract_verdict(verdict: &String) -> (String, bool) {
-    let is_accepted = verdict.contains("<span class=\"verdict-accepted\">");
-    match verdict.find("<span class=\"verdict-") {
-        None => (verdict.trim().to_string(), false),
-        Some(pos) => {
-            let rem = &verdict[pos..];
-            let pos1 = match rem.find(">") {
-                None => return (verdict.clone(), false),
-                Some(pos) => pos + 1,
-            };
-            let rem1 = &rem[pos1..];
-            let rem2 = rem1.replace("<span class=\"verdict-format-judged\">", "");
-            let pos2 = match rem2.find("</span>") {
-                None => return (verdict.clone(), false),
-                Some(pos) => pos,
-            };
-            (rem2[..pos2].to_string(), is_accepted)
-        }
+async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverResult<bool> {
+    let cell = driver.find(By::ClassName("status-cell")).await?;
+    let verdict = cell.find(By::Tag("span")).await?;
+    let verdict_text = verdict.text().await?;
+    let is_waiting = verdict.class_name().await? == Some("verdict-waiting".to_string());
+    let is_accepted = verdict.class_name().await? == Some("verdict-accepted".to_string());
+    let verdict = verdict_text;
+    clear(last_verdict.len());
+    if verdict == *last_verdict && is_waiting {
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        driver.refresh().await?;
+        skip_cloudflare(driver).await?;
+        return Ok(false);
     }
+    let mut stdout = std::io::stdout();
+    let _ = execute!(
+        stdout,
+        SetForegroundColor(if is_waiting {
+            Color::Yellow
+        } else if is_accepted {
+            Color::Green
+        } else {
+            Color::Red
+        })
+    );
+    print!("{}", verdict);
+    let _ = execute!(stdout, ResetColor);
+    if !is_waiting {
+        println!();
+        return Ok(true);
+    }
+    *last_verdict = verdict;
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    Ok(false)
 }
 
 fn get_language(language: String) -> String {

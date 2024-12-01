@@ -99,6 +99,9 @@ pub async fn submit(
         );
         println!("{}", full_verdict);
         let _ = execute!(stdout, ResetColor);
+        if full_verdict == "Compilation Error".to_string() {
+            return Ok(());
+        }
         File::create("source.txt")
             .unwrap()
             .write_all(driver.source().await?.as_bytes())
@@ -143,6 +146,14 @@ pub async fn submit(
             );
             println!("{:7} {:4} {}", subtask, task, result);
             let _ = execute!(stdout, ResetColor);
+        }
+        if let Some(url) = verdict
+            .find(By::ClassName("_submission__anchor_vov4h_99"))
+            .await?
+            .attr("href")
+            .await?
+        {
+            println!("Submission url https://www.codechef.com{}", url);
         }
         break;
     }

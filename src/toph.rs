@@ -47,13 +47,6 @@ pub async fn submit(
     println!("Cannot change language on toph, language of last submit would be used");
     driver.maximize_window().await?;
     driver.goto(&url).await?;
-    // for _ in 0..10 {
-    //     driver
-    //         .action_chain()
-    //         .send_keys(Key::PageDown)
-    //         .perform()
-    //         .await?;
-    // }
     for button in driver.find_all(By::Tag("button")).await? {
         let class_name = button.class_name().await?;
         if class_name.is_some() && class_name.unwrap().contains("btn-codepanel") {
@@ -76,6 +69,13 @@ pub async fn submit(
         return Ok(());
     }
     buttons[13].click().await?;
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    if driver.current_url().await?.as_str().contains("/p/") {
+        let toast = driver.find(By::ClassName("toast")).await?;
+        println!("Error submitting: {}", toast.text().await?);
+        return Ok(());
+    }
+    println!("Submission url {}", driver.current_url().await?);
     let mut last_verdict = "".to_string();
     loop {
         match single_iteration(driver, &mut last_verdict).await {
