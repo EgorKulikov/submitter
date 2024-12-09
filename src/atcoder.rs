@@ -93,7 +93,20 @@ pub async fn submit(
         .await?;
     driver.find(By::Id("submit")).await?.click().await?;
     let mut last_verdict = "".to_string();
+    let mut printed_url = false;
     loop {
+        clear(last_verdict.len());
+        if !printed_url {
+            if let Some(url) = driver
+                .find(By::ClassName("submission-details-link"))
+                .await?
+                .attr("href")
+                .await?
+            {
+                println!("Submission url https://atcoder.jp{}", url);
+                printed_url = true;
+            }
+        }
         match iteration(driver, &mut last_verdict).await {
             Ok(true) => break,
             Err(err) => match err {
@@ -140,7 +153,6 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
         return Ok(true);
     }
     let class = class.unwrap();
-    clear(last_verdict.len());
     let mut stdout = std::io::stdout();
     let _ = execute!(
         stdout,
@@ -156,14 +168,6 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
     let _ = execute!(stdout, ResetColor);
     if !class.contains("label-default") {
         println!();
-        if let Some(url) = driver
-            .find(By::ClassName("submission-details-link"))
-            .await?
-            .attr("href")
-            .await?
-        {
-            println!("Submission url https://atcoder.jp{}", url);
-        }
         return Ok(true);
     }
     *last_verdict = verdict;

@@ -3,7 +3,6 @@ use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
 use dialoguer::{Input, Password};
-use std::path::Path;
 use thirtyfour::error::{WebDriverError, WebDriverResult};
 use thirtyfour::{By, Cookie, WebDriver};
 
@@ -70,7 +69,6 @@ pub async fn submit(
     set_value(driver, language_selector, result).await?;
     let source_code = driver.find(By::Id("input-answer_answer_editor")).await?;
     set_value(driver, source_code, source).await?;
-    driver.screenshot(&Path::new("screenshot.png")).await?;
     driver
         .find(By::Id("button-submit-answer"))
         .await?

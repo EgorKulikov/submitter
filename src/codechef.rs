@@ -5,7 +5,6 @@ use dialoguer::console::Term;
 use dialoguer::{Input, Password};
 use std::fs::File;
 use std::io::Write;
-use std::path::Path;
 use thirtyfour::error::WebDriverResult;
 use thirtyfour::{By, Cookie, Key, WebDriver};
 
@@ -77,7 +76,6 @@ pub async fn submit(
         )
         .await?;
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    driver.screenshot(Path::new("screenshot.png")).await?;
     driver.find(By::Id("submit_btn")).await?.click().await?;
     let mut stdout = std::io::stdout();
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;

@@ -1,9 +1,8 @@
-use crate::{clear, save_source};
+use crate::clear;
 use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
 use dialoguer::{Input, Password};
-use std::path::Path;
 use thirtyfour::error::{WebDriverError, WebDriverResult};
 use thirtyfour::{By, Cookie, WebDriver};
 
@@ -18,7 +17,6 @@ async fn skip_cloudflare(driver: &WebDriver) -> WebDriverResult<()> {
     while is_cloudflare(driver).await? {
         times += 1;
         if times == 10 {
-            driver.screenshot(&Path::new("screenshot.png")).await?;
             eprintln!("Cannot bypass cloudflare captcha, please submit manually");
             eprintln!("Will clear cookies, may help");
             return Err(WebDriverError::ParseError(
@@ -131,8 +129,6 @@ pub async fn submit(
         .as_str()
         .starts_with(&submit_url)
     {
-        save_source(driver).await?;
-        driver.screenshot(&Path::new("screenshot.png")).await?;
         let error = driver.find_all(By::ClassName("error")).await?;
         eprintln!("Error submitting: ");
         for element in error {
@@ -176,8 +172,6 @@ pub async fn submit(
 }
 
 async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverResult<bool> {
-    driver.screenshot(&Path::new("screenshot.png")).await?;
-    save_source(driver).await?;
     let mut stdout = std::io::stdout();
     let cell = driver.find(By::ClassName("status-cell")).await?;
     let verdict = cell.text().await?;
