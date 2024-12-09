@@ -80,10 +80,21 @@ pub async fn submit(
         Some(pos) => pos,
     };
     let id = url[pos + 9..].replace("/", "");
-    let submit_url = if url.contains("problemset") {
-        "https://mirror.codeforces.com/problemset/submit".to_string()
+    let (submit_url, status_url) = if url.contains("problemset") {
+        let slash = url[pos + 9..].find('/').unwrap();
+        (
+            "https://mirror.codeforces.com/problemset/submit".to_string(),
+            format!(
+                "https://codeforces.com/problemset/submission/{}/",
+                &url[pos + 9..pos + 9 + slash]
+            ),
+        )
     } else {
-        url[..pos].replace("https://codeforces.com", "https://mirror.codeforces.com") + "/submit"
+        (
+            url[..pos].replace("https://codeforces.com", "https://mirror.codeforces.com")
+                + "/submit",
+            format!("{}/submission/", &url[..pos]),
+        )
     };
     driver.goto(&submit_url).await?;
     skip_cloudflare(driver).await?;
@@ -130,7 +141,22 @@ pub async fn submit(
         return Ok(());
     }
     let mut last_verdict = "".to_string();
+    let mut printed_url = false;
     loop {
+        clear(last_verdict.len());
+        if !printed_url {
+            if let Ok(id_cell) = driver.find(By::ClassName("id-cell")).await {
+                if let Some(id) = id_cell
+                    .find(By::Tag("a"))
+                    .await?
+                    .attr("submissionid")
+                    .await?
+                {
+                    printed_url = true;
+                    println!("Submission url {}{}", status_url, id);
+                }
+            }
+        }
         match iteration(driver, &mut last_verdict).await {
             Ok(res) => {
                 if res {
@@ -146,22 +172,25 @@ pub async fn submit(
             },
         }
     }
-    let id_cell = driver.find(By::ClassName("id-cell")).await?;
-    if let Some(link) = id_cell.find(By::Tag("a")).await?.attr("href").await? {
-        println!("Submission url https://codeforces.com{}", link);
-    }
     Ok(())
 }
 
 async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverResult<bool> {
+    driver.screenshot(&Path::new("screenshot.png")).await?;
+    save_source(driver).await?;
     let mut stdout = std::io::stdout();
     let cell = driver.find(By::ClassName("status-cell")).await?;
     let verdict = cell.text().await?;
     let (is_waiting, is_accepted) = match cell.find(By::Tag("span")).await {
-        Ok(verdict) => (
-            verdict.class_name().await? == Some("verdict-waiting".to_string()),
-            verdict.class_name().await? == Some("verdict-accepted".to_string()),
-        ),
+        Ok(mut verdict) => {
+            if verdict.class_name().await? == Some("submissionVerdictWrapper".to_string()) {
+                verdict = verdict.find(By::Tag("span")).await?;
+            }
+            (
+                verdict.class_name().await? == Some("verdict-waiting".to_string()),
+                verdict.class_name().await? == Some("verdict-accepted".to_string()),
+            )
+        }
         Err(_) => {
             if verdict.trim() == "Compilation error" {
                 (false, false)
@@ -170,13 +199,6 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
             }
         }
     };
-    clear(last_verdict.len());
-    if verdict == *last_verdict && is_waiting {
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        driver.refresh().await?;
-        skip_cloudflare(driver).await?;
-        return Ok(false);
-    }
     let _ = execute!(
         stdout,
         SetForegroundColor(if is_waiting {
@@ -189,6 +211,12 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
     );
     print!("{}", verdict);
     let _ = execute!(stdout, ResetColor);
+    if verdict == *last_verdict && is_waiting {
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        driver.refresh().await?;
+        skip_cloudflare(driver).await?;
+        return Ok(false);
+    }
     if !is_waiting {
         println!();
         return Ok(true);

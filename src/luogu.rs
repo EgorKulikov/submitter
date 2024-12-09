@@ -138,10 +138,10 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
         let mut global_verdict = None;
         let mut points = None;
         for i in 0..spans.len() {
-            if spans[i].text().await?.contains("评测状态") {
+            if spans[i].text().await?.contains("评测状态") && i + 2 < spans.len() {
                 global_verdict = Some(spans[i + 2].text().await?.trim().to_string());
             }
-            if spans[i].text().await?.contains("评测分数") {
+            if spans[i].text().await?.contains("评测分数") && i + 3 < spans.len() {
                 points = Some(spans[i + 3].text().await?.trim().to_string());
             }
         }
@@ -225,7 +225,7 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
     let _ = execute!(stdout, ResetColor);
     if total != 0 && pending == 0 {
         println!();
-        let mut id = 0;
+        let mut id = 1;
         for (name, tests) in cards {
             println!("{}", name);
             for test in tests {
