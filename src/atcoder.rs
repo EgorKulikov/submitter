@@ -94,20 +94,18 @@ pub async fn submit(
     driver.find(By::Id("submit")).await?.click().await?;
     let mut last_verdict = "".to_string();
     let mut printed_url = false;
+    let mut times = 0;
     loop {
         clear(last_verdict.len());
         if !printed_url {
-            if let Some(url) = driver
-                .find(By::ClassName("submission-details-link"))
-                .await?
-                .attr("href")
-                .await?
-            {
-                println!("Submission url https://atcoder.jp{}", url);
-                printed_url = true;
+            if let Ok(cell) = driver.find(By::ClassName("submission-details-link")).await {
+                if let Some(url) = cell.attr("href").await? {
+                    println!("Submission url https://atcoder.jp{}", url);
+                    printed_url = true;
+                }
             }
         }
-        match iteration(driver, &mut last_verdict).await {
+        match iteration(driver, &mut last_verdict, &mut times).await {
             Ok(true) => break,
             Err(err) => match err {
                 WebDriverError::StaleElementReference(_) => {
@@ -124,7 +122,11 @@ pub async fn submit(
     Ok(())
 }
 
-async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverResult<bool> {
+async fn iteration(
+    driver: &WebDriver,
+    last_verdict: &mut String,
+    times: &mut usize,
+) -> WebDriverResult<bool> {
     let table = driver.find(By::Tag("tbody")).await?;
     let row = table.find(By::Tag("tr")).await?;
     let cols = row.find_all(By::Tag("td")).await?;
@@ -169,6 +171,16 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
     if !class.contains("label-default") {
         println!();
         return Ok(true);
+    }
+    if *last_verdict == verdict {
+        *times += 1;
+        if *times > 50 {
+            driver.refresh().await?;
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            *times = 0;
+        }
+    } else {
+        *times = 0;
     }
     *last_verdict = verdict;
     Ok(false)
