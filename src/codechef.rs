@@ -42,8 +42,16 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
         .perform()
         .await?;
     driver.action_chain().send_keys(" ").perform().await?;
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    Ok(driver.get_all_cookies().await?)
+    for _ in 0..10 {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        if driver.current_url().await?.as_str() != "https://www.codechef.com/login" {
+            return Ok(driver.get_all_cookies().await?);
+        }
+    }
+    eprintln!("Failed to login");
+    Err(thirtyfour::error::WebDriverError::ParseError(
+        "Failed to login".to_string(),
+    ))
 }
 
 pub async fn submit(
@@ -54,7 +62,7 @@ pub async fn submit(
 ) -> WebDriverResult<()> {
     driver.maximize_window().await?;
     driver.goto(&url).await?;
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
     let language_select = driver.find(By::Id("language-select")).await?;
     language_select.click().await?;
     driver.action_chain().send_keys(language).perform().await?;
@@ -78,7 +86,7 @@ pub async fn submit(
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     driver.find(By::Id("submit_btn")).await?.click().await?;
     let mut stdout = std::io::stdout();
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
     let _ = execute!(stdout, SetForegroundColor(Color::Yellow));
     print!("Judging");
     let _ = execute!(stdout, ResetColor);
