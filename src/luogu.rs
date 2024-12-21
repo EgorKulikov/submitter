@@ -97,6 +97,7 @@ pub async fn submit(
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     let mut url_printed = false;
     let mut last_verdict = "".to_string();
+    let mut tries = 0;
     loop {
         if !url_printed {
             let url = driver.current_url().await?.to_string();
@@ -107,7 +108,7 @@ pub async fn submit(
                 url_printed = true;
             }
         }
-        match iteration(driver, &mut last_verdict).await {
+        match iteration(driver, &mut last_verdict, &mut tries).await {
             Ok(true) => break,
             Err(err) => match err {
                 WebDriverError::StaleElementReference(_) => {
@@ -124,10 +125,20 @@ pub async fn submit(
     Ok(())
 }
 
-async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverResult<bool> {
+async fn iteration(
+    driver: &WebDriver,
+    last_verdict: &mut String,
+    tries: &mut usize,
+) -> WebDriverResult<bool> {
     if let Ok(content_el) = driver.find(By::Id("swal2-content")).await {
         let content = content_el.inner_html().await?.trim().to_string();
         if content.is_empty() {
+            *tries += 1;
+            if *tries == 50 {
+                driver.refresh().await?;
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             return Ok(false);
         }
         if content.contains("captcha") {
@@ -160,6 +171,12 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
         }
         (global_verdict, points)
     } else {
+        *tries += 1;
+        if *tries == 50 {
+            driver.refresh().await?;
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         return Ok(false);
     };
     clear(last_verdict.len());
@@ -258,6 +275,15 @@ async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverRe
         }
         Ok(true)
     } else {
+        *tries += 1;
+        if *last_verdict != verdict {
+            *tries = 0;
+        }
+        if *tries == 50 {
+            driver.refresh().await?;
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         *last_verdict = verdict;
         Ok(false)
     }
