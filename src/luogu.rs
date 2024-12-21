@@ -125,9 +125,22 @@ pub async fn submit(
 }
 
 async fn iteration(driver: &WebDriver, last_verdict: &mut String) -> WebDriverResult<bool> {
-    if let Ok(content) = driver.find(By::Id("swal2-content")).await {
-        let content = content.inner_html().await?.trim().to_string();
+    if let Ok(content_el) = driver.find(By::Id("swal2-content")).await {
+        let content = content_el.inner_html().await?.trim().to_string();
         if content.is_empty() {
+            return Ok(false);
+        }
+        if content.contains("captcha") {
+            content_el.screenshot(&Path::new("captcha.png")).await?;
+            let captcha: String = Input::with_theme(&dialoguer::theme::ColorfulTheme::default())
+                .with_prompt("Enter the captcha from captcha.png")
+                .interact_on(&Term::stdout())
+                .unwrap();
+            let input = driver.find(By::ClassName("swal2-input")).await?;
+            input.send_keys(&captcha).await?;
+            let button = driver.find(By::ClassName("swal2-confirm")).await?;
+            button.click().await?;
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             return Ok(false);
         }
         println!("Error from luogo, probably code is too long: {}", content);
