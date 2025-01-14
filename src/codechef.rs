@@ -3,7 +3,6 @@ use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
 use dialoguer::{Input, Password};
-use std::fs::File;
 use std::io::Write;
 use thirtyfour::error::WebDriverResult;
 use thirtyfour::{By, Cookie, Key, WebDriver};
@@ -110,10 +109,6 @@ pub async fn submit(
         if full_verdict == "Compilation Error".to_string() {
             return Ok(());
         }
-        File::create("source.txt")
-            .unwrap()
-            .write_all(driver.source().await?.as_bytes())
-            .unwrap();
         let table = loop {
             match driver.find(By::ClassName("status-table")).await {
                 Ok(table) => break table,
