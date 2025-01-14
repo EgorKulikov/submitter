@@ -98,23 +98,21 @@ async fn run(
     };
 
     println!("Logging in");
-    let cookies = match site
+    match site
         .login(&driver, all_cookies.get(&domain).cloned().unwrap_or(vec![]))
         .await
     {
-        Ok(cookies) => cookies,
-        Err(err) => match err {
-            WebDriverError::ParseError(_) => {
-                vec![]
-            }
-            _ => {
-                return Err(err);
-            }
-        },
+        Ok(cookies) => {
+            all_cookies.insert(domain, cookies.clone());
+            let cookies_string = serde_json::to_string(&all_cookies).unwrap();
+            std::fs::write("cookies.json", cookies_string).unwrap();
+        }
+        Err(_) => {
+            all_cookies.insert(domain, Vec::new());
+            let cookies_string = serde_json::to_string(&all_cookies).unwrap();
+            std::fs::write("cookies.json", cookies_string).unwrap();
+        }
     };
-    all_cookies.insert(domain, cookies.clone());
-    let cookies_string = serde_json::to_string(&all_cookies).unwrap();
-    std::fs::write("cookies.json", cookies_string).unwrap();
     println!("Submitting");
     site.submit(&driver, url.clone(), language.clone(), source.clone())
         .await?;

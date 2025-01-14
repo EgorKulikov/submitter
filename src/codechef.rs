@@ -98,7 +98,9 @@ pub async fn submit(
         }
         clear(7);
         let full_verdict = verdict.find(By::Tag("span")).await?.text().await?;
-        let accepted = full_verdict.contains("Correct Answer");
+        let accepted = full_verdict.contains("Correct Answer")
+            || full_verdict.contains("You got it right!")
+            || full_verdict.contains("Excellent work!");
         let _ = execute!(
             stdout,
             SetForegroundColor(if accepted { Color::Green } else { Color::Red })
@@ -153,12 +155,13 @@ pub async fn submit(
             println!("{:7} {:4} {}", subtask, task, result);
             let _ = execute!(stdout, ResetColor);
         }
-        if let Some(url) = verdict
+        let Ok(anchor) = verdict
             .find(By::ClassName("_submission__anchor_vov4h_99"))
-            .await?
-            .attr("href")
-            .await?
-        {
+            .await
+        else {
+            return Ok(());
+        };
+        if let Some(url) = anchor.attr("href").await? {
             println!("Submission url https://www.codechef.com{}", url);
         }
         break;
