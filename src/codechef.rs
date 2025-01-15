@@ -3,7 +3,6 @@ use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
 use dialoguer::{Input, Password};
-use std::io::Write;
 use thirtyfour::error::WebDriverResult;
 use thirtyfour::{By, Cookie, Key, WebDriver};
 
@@ -99,7 +98,8 @@ pub async fn submit(
         let full_verdict = verdict.find(By::Tag("span")).await?.text().await?;
         let accepted = full_verdict.contains("Correct Answer")
             || full_verdict.contains("You got it right!")
-            || full_verdict.contains("Excellent work!");
+            || full_verdict.contains("Excellent work!")
+            || full_verdict.contains("Awesome, you nailed it!");
         let _ = execute!(
             stdout,
             SetForegroundColor(if accepted { Color::Green } else { Color::Red })
