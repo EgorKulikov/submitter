@@ -43,6 +43,7 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
     for _ in 0..10 {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         if driver.current_url().await?.as_str() != "https://www.codechef.com/login" {
+            eprintln!("Logged in");
             return Ok(driver.get_all_cookies().await?);
         }
     }
@@ -84,12 +85,37 @@ pub async fn submit(
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     driver.find(By::Id("submit_btn")).await?.click().await?;
     let mut stdout = std::io::stdout();
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    driver
+        .find(By::Id("vertical-tab-panel-1"))
+        .await?
+        .click()
+        .await?;
     tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+    let id = driver
+        .find_all(By::Tag("tbody"))
+        .await?
+        .last()
+        .unwrap()
+        .find_all(By::Tag("div"))
+        .await?[1]
+        .text()
+        .await?;
+    driver
+        .goto(&format!("https://www.codechef.com/viewsolution/{}", id))
+        .await?;
+    println!(
+        "Submission url https://www.codechef.com/viewsolution/{}",
+        id
+    );
     let _ = execute!(stdout, SetForegroundColor(Color::Yellow));
     print!("Judging");
     let _ = execute!(stdout, ResetColor);
+    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
     loop {
-        let verdict = driver.find(By::ClassName("_runTab_1mvh4_566")).await?;
+        let verdict = driver
+            .find(By::ClassName("_status__container_1xnpw_48"))
+            .await?;
         if verdict.text().await?.as_str() == "Submission Queued..." {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             continue;
@@ -114,7 +140,6 @@ pub async fn submit(
                 Ok(table) => break table,
                 Err(_) => {
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                    continue;
                 }
             }
         };
@@ -149,15 +174,6 @@ pub async fn submit(
             );
             println!("{:7} {:4} {}", subtask, task, result);
             let _ = execute!(stdout, ResetColor);
-        }
-        let Ok(anchor) = verdict
-            .find(By::ClassName("_submission__anchor_vov4h_99"))
-            .await
-        else {
-            return Ok(());
-        };
-        if let Some(url) = anchor.attr("href").await? {
-            println!("Submission url https://www.codechef.com{}", url);
         }
         break;
     }
