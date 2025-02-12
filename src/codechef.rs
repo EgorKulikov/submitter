@@ -149,10 +149,15 @@ pub async fn submit(
         if full_verdict == "Compilation Error".to_string() {
             return Ok(());
         }
+        let mut tries = 0;
         let table = loop {
             match driver.find(By::ClassName("status-table")).await {
                 Ok(table) => break table,
                 Err(_) => {
+                    tries += 1;
+                    if tries > 20 {
+                        return Ok(());
+                    }
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 }
             }
