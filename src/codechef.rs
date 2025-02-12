@@ -13,7 +13,7 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
         driver.add_cookie(cookie).await?;
     }
     driver.goto("https://codechef.com/").await?;
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
     let source = driver.source().await?;
     if !source.contains("Sign Up") {
         return Ok(driver.get_all_cookies().await?);
@@ -41,11 +41,18 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
         .await?;
     driver.action_chain().send_keys(" ").perform().await?;
     for _ in 0..10 {
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        if driver.current_url().await?.as_str() != "https://www.codechef.com/login" {
-            eprintln!("Logged in");
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        eprintln!("Ping");
+        if !driver
+            .find(By::Tag("title"))
+            .await?
+            .text()
+            .await?
+            .starts_with("CodeChef Login")
+        {
             return Ok(driver.get_all_cookies().await?);
         }
+        eprintln!("Pong");
     }
     eprintln!("Failed to login");
     Err(thirtyfour::error::WebDriverError::ParseError(
@@ -91,16 +98,17 @@ pub async fn submit(
         .await?
         .click()
         .await?;
-    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-    let id = driver
-        .find_all(By::Tag("tbody"))
-        .await?
-        .last()
-        .unwrap()
-        .find_all(By::Tag("div"))
-        .await?[1]
-        .text()
-        .await?;
+    let id = loop {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        let tbody = driver.find_all(By::Tag("tbody")).await?;
+        if tbody.is_empty() {
+            continue;
+        }
+        let divs = tbody.last().unwrap().find_all(By::Tag("div")).await?;
+        if divs.len() > 1 {
+            break divs[1].text().await?;
+        }
+    };
     driver
         .goto(&format!("https://www.codechef.com/viewsolution/{}", id))
         .await?;
@@ -113,11 +121,17 @@ pub async fn submit(
     let _ = execute!(stdout, ResetColor);
     tokio::time::sleep(std::time::Duration::from_secs(4)).await;
     loop {
-        let verdict = driver
+        let Ok(verdict) = driver
             .find(By::ClassName("_status__container_1xnpw_48"))
-            .await?;
-        if verdict.text().await?.as_str() == "Submission Queued..." {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            .await
+        else {
+            driver.refresh().await?;
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            continue;
+        };
+        if verdict.text().await?.starts_with("Submission Queued") {
+            driver.refresh().await?;
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
             continue;
         }
         clear(7);

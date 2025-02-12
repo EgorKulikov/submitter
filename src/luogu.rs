@@ -5,7 +5,7 @@ use dialoguer::console::Term;
 use dialoguer::{Input, Password};
 use std::collections::BTreeSet;
 use std::path::Path;
-use thirtyfour::error::{WebDriverError, WebDriverResult};
+use thirtyfour::error::{WebDriverErrorInner, WebDriverResult};
 use thirtyfour::{By, Cookie, WebDriver};
 
 pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<Vec<Cookie>> {
@@ -110,8 +110,8 @@ pub async fn submit(
         }
         match iteration(driver, &mut last_verdict, &mut tries).await {
             Ok(true) => break,
-            Err(err) => match err {
-                WebDriverError::StaleElementReference(_) => {
+            Err(err) => match *err {
+                WebDriverErrorInner::StaleElementReference(_) => {
                     continue;
                 }
                 _ => {

@@ -10,6 +10,7 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::env;
 use std::fs::read_to_string;
+use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 use thirtyfour::prelude::*;
@@ -107,10 +108,16 @@ async fn run(
             let cookies_string = serde_json::to_string(&all_cookies).unwrap();
             std::fs::write("cookies.json", cookies_string).unwrap();
         }
-        Err(_) => {
+        Err(err) => {
             all_cookies.insert(domain, Vec::new());
             let cookies_string = serde_json::to_string(&all_cookies).unwrap();
             std::fs::write("cookies.json", cookies_string).unwrap();
+            eprintln!(
+                "Failed to login:\n{}\n{:?}",
+                driver.current_url().await?,
+                err
+            );
+            return Ok(());
         }
     };
     println!("Submitting");
@@ -203,6 +210,7 @@ async fn set_value(driver: &WebDriver, element: WebElement, value: String) -> We
 
 #[allow(dead_code)]
 async fn save_source(driver: &WebDriver) -> WebDriverResult<()> {
+    driver.screenshot(&Path::new("screenshot.png")).await?;
     std::fs::write("source.html", driver.source().await?).unwrap();
     Ok(())
 }

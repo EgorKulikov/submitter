@@ -3,7 +3,7 @@ use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
 use dialoguer::{Input, Password};
-use thirtyfour::error::{WebDriverError, WebDriverResult};
+use thirtyfour::error::{WebDriverError, WebDriverErrorInner, WebDriverResult};
 use thirtyfour::{By, Cookie, WebDriver};
 
 async fn is_cloudflare(driver: &WebDriver) -> WebDriverResult<bool> {
@@ -159,9 +159,9 @@ pub async fn submit(
                     break;
                 }
             }
-            Err(err) => match err {
-                WebDriverError::NoSuchElement(_) => {}
-                WebDriverError::StaleElementReference(_) => {}
+            Err(err) => match *err {
+                WebDriverErrorInner::NoSuchElement(_) => {}
+                WebDriverErrorInner::StaleElementReference(_) => {}
                 _ => {
                     return Err(err);
                 }

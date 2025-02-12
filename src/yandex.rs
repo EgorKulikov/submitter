@@ -3,7 +3,7 @@ use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
 use dialoguer::{Input, Password};
-use thirtyfour::error::{WebDriverError, WebDriverResult};
+use thirtyfour::error::{WebDriverErrorInner, WebDriverResult};
 use thirtyfour::{By, Cookie, Key, WebDriver};
 
 pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<Vec<Cookie>> {
@@ -129,12 +129,12 @@ pub async fn submit(
         match single_iteration(driver, &mut last_verdict).await {
             Ok(true) => break,
             Ok(false) => continue,
-            Err(err) => match err {
-                WebDriverError::NoSuchElement(_) => {
+            Err(err) => match *err {
+                WebDriverErrorInner::NoSuchElement(_) => {
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     continue;
                 }
-                WebDriverError::StaleElementReference(_) => {
+                WebDriverErrorInner::StaleElementReference(_) => {
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     continue;
                 }
