@@ -42,7 +42,6 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
     driver.action_chain().send_keys(" ").perform().await?;
     for _ in 0..10 {
         tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-        eprintln!("Ping");
         if !driver
             .find(By::Tag("title"))
             .await?
@@ -52,7 +51,6 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
         {
             return Ok(driver.get_all_cookies().await?);
         }
-        eprintln!("Pong");
     }
     eprintln!("Failed to login");
     Err(thirtyfour::error::WebDriverError::ParseError(
