@@ -90,7 +90,10 @@ async fn run(
         "contest.yandex.com" => Site::Yandex,
         "atcoder.jp" => Site::AtCoder,
         "contest.ucup.ac" => Site::UniversalCup,
-        "luogu.com.cn" => Site::Luogu,
+        "luogu.com.cn" => {
+            eprintln!("Luogu support is discontinued due to captcha");
+            return Ok(());
+        }
         "toph.co" => Site::Toph,
         _ => {
             println!("Unsupported domain");
@@ -132,7 +135,7 @@ enum Site {
     Yandex,
     AtCoder,
     UniversalCup,
-    Luogu,
+    // Luogu,
     Toph,
 }
 
@@ -150,7 +153,7 @@ impl Site {
             Site::Yandex => yandex::submit(driver, url, language, source).await,
             Site::AtCoder => atcoder::submit(driver, url, language, source).await,
             Site::UniversalCup => ucup::submit(driver, url, language, source).await,
-            Site::Luogu => luogu::submit(driver, url, language, source).await,
+            // Site::Luogu => luogu::submit(driver, url, language, source).await,
             Site::Toph => toph::submit(driver, url, language, source).await,
         }
     }
@@ -166,7 +169,7 @@ impl Site {
             Site::Yandex => yandex::login(driver, cookies).await,
             Site::AtCoder => atcoder::login(driver, cookies).await,
             Site::UniversalCup => ucup::login(driver, cookies).await,
-            Site::Luogu => luogu::login(driver, cookies).await,
+            // Site::Luogu => luogu::login(driver, cookies).await,
             Site::Toph => toph::login(driver, cookies).await,
         }
     }

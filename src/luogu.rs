@@ -1,4 +1,6 @@
-use crate::clear;
+#![allow(dead_code)]
+
+use crate::{clear, save_source};
 use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
@@ -72,18 +74,10 @@ pub async fn submit(
 ) -> WebDriverResult<()> {
     println!("Cannot change language on luogo, language of last submit would be used");
     driver.goto(&url).await?;
-    driver
-        .find(By::ClassName("lfe-form-sz-middle"))
-        .await?
-        .click()
-        .await?;
+    driver.find(By::ClassName("solid")).await?.click().await?;
     driver
         .execute(
-            "\
-        var editordiv = document.getElementsByClassName(\"editor\")[0];\
-        var editor = ace.edit(editordiv);\
-        editor.setValue(arguments[0]);\
-    ",
+            "document.getElementsByClassName('cm-content')[0].innerHTML = arguments[0];",
             vec![serde_json::to_value(source).unwrap()],
         )
         .await?;
@@ -95,6 +89,9 @@ pub async fn submit(
         }
     }
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    driver.screenshot(&Path::new("screenshot.png")).await?;
+    save_source(driver).await?;
+    eprintln!("Url: {}", driver.current_url().await?);
     let mut url_printed = false;
     let mut last_verdict = "".to_string();
     let mut tries = 0;

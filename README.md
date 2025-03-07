@@ -27,7 +27,8 @@ At the moment the following is supported:
 - Yandex Contest
 - AtCoder
 - Universal Cup
-- Luogu*
 - Toph*
-  
+
 *no support for specifying language, language of the last submit is used
+
+Luogu support is discontinued due to cloudflare captcha
