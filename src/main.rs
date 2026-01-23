@@ -7,6 +7,7 @@ mod ucup;
 mod yandex;
 
 use regex::Regex;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::fs::read_to_string;
@@ -27,6 +28,21 @@ async fn main() -> WebDriverResult<()> {
     let language = &args[2];
     let file = &args[3];
     let source = read_to_string(file).unwrap();
+
+    let url_regex = Regex::new(r"https?://(?:www\.)?([^/]+).*").unwrap();
+    let domain = {
+        match url_regex.captures(url) {
+            None => {
+                println!("Unexpected URL");
+                return Ok(());
+            }
+            Some(caps) => caps[1].to_string(),
+        }
+    };
+    if domain.ends_with("codeforces.com") {
+        codeforces::submit(url.clone(), source);
+        return Ok(());
+    }
 
     let caps = DesiredCapabilities::chrome();
 
@@ -64,6 +80,23 @@ async fn main() -> WebDriverResult<()> {
     Ok(())
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BrowserCookie {
+    domain: String,
+    expiration_date: Option<f64>,
+    host_only: bool,
+    http_only: bool,
+    name: String,
+    path: String,
+    same_site: String,
+    secure: bool,
+    session: bool,
+    store_id: String,
+    value: String,
+    id: i32,
+}
+
 async fn run(
     driver: &WebDriver,
     url: &String,
@@ -71,6 +104,27 @@ async fn run(
     source: &String,
 ) -> WebDriverResult<()> {
     let cookies_string = read_to_string("cookies.json").unwrap_or("{}".to_string());
+    /*    let cookies: HashMap<String, Vec<BrowserCookie>> =
+        serde_json::from_str(&cookies_string).unwrap();
+    let all_cookies = cookies
+        .into_iter()
+        .map(|(domain, cookies)| {
+            let cookies = cookies
+                .into_iter()
+                .map(|cookie| {
+                    let mut new_cookie = Cookie::new(cookie.name.clone(), cookie.value.clone());
+                    new_cookie.set_domain(cookie.domain.clone());
+                    new_cookie.set_path(cookie.path.clone());
+                    if let Some(expiration_date) = cookie.expiration_date {
+                        new_cookie.set_expiry(expiration_date as i64);
+                    }
+                    new_cookie.set_secure(cookie.secure);
+                    new_cookie
+                })
+                .collect::<Vec<_>>();
+            (domain, cookies)
+        })
+        .collect::<HashMap<_, _>>();*/
     let mut all_cookies: HashMap<String, Vec<Cookie>> =
         serde_json::from_str(&cookies_string).unwrap_or(HashMap::new());
     let url_regex = Regex::new(r"https?://(?:www\.)?([^/]+).*").unwrap();
@@ -85,15 +139,12 @@ async fn run(
     };
 
     let site = match domain.as_str() {
-        "codeforces.com" => Site::Codeforces,
+        // "codeforces.com" => Site::Codeforces,
         "codechef.com" => Site::Codechef,
-        "contest.yandex.com" => Site::Yandex,
-        "atcoder.jp" => Site::AtCoder,
+        // "contest.yandex.com" => Site::Yandex,
+        // "atcoder.jp" => Site::AtCoder,
         "contest.ucup.ac" => Site::UniversalCup,
-        "luogu.com.cn" => {
-            eprintln!("Luogu support is discontinued due to captcha");
-            return Ok(());
-        }
+        "luogu.com.cn" => Site::Luogu,
         "toph.co" => Site::Toph,
         _ => {
             println!("Unsupported domain");
@@ -123,6 +174,11 @@ async fn run(
             return Ok(());
         }
     };
+    /*    driver.goto(url).await?;
+    driver.delete_all_cookies().await?;
+    for cookie in all_cookies.get(&domain).cloned().unwrap_or(vec![]) {
+        driver.add_cookie(cookie).await?;
+    }*/
     println!("Submitting");
     site.submit(&driver, url.clone(), language.clone(), source.clone())
         .await?;
@@ -130,12 +186,12 @@ async fn run(
 }
 
 enum Site {
-    Codeforces,
+    // Codeforces,
     Codechef,
-    Yandex,
-    AtCoder,
+    // Yandex,
+    // AtCoder,
     UniversalCup,
-    // Luogu,
+    Luogu,
     Toph,
 }
 
@@ -148,12 +204,12 @@ impl Site {
         source: String,
     ) -> WebDriverResult<()> {
         match self {
-            Site::Codeforces => codeforces::submit(driver, url, language, source).await,
+            // Site::Codeforces => codeforces::submit(driver, url, language, source).await,
             Site::Codechef => codechef::submit(driver, url, language, source).await,
-            Site::Yandex => yandex::submit(driver, url, language, source).await,
-            Site::AtCoder => atcoder::submit(driver, url, language, source).await,
+            // Site::Yandex => yandex::submit(driver, url, language, source).await,
+            // Site::AtCoder => atcoder::submit(driver, url, language, source).await,
             Site::UniversalCup => ucup::submit(driver, url, language, source).await,
-            // Site::Luogu => luogu::submit(driver, url, language, source).await,
+            Site::Luogu => luogu::submit(driver, url, language, source).await,
             Site::Toph => toph::submit(driver, url, language, source).await,
         }
     }
@@ -164,12 +220,12 @@ impl Site {
         cookies: Vec<Cookie>,
     ) -> WebDriverResult<Vec<Cookie>> {
         match self {
-            Site::Codeforces => codeforces::login(driver, cookies).await,
+            // Site::Codeforces => codeforces::login(driver, cookies).await,
             Site::Codechef => codechef::login(driver, cookies).await,
-            Site::Yandex => yandex::login(driver, cookies).await,
-            Site::AtCoder => atcoder::login(driver, cookies).await,
+            // Site::Yandex => yandex::login(driver, cookies).await,
+            // Site::AtCoder => atcoder::login(driver, cookies).await,
             Site::UniversalCup => ucup::login(driver, cookies).await,
-            // Site::Luogu => luogu::login(driver, cookies).await,
+            Site::Luogu => luogu::login(driver, cookies).await,
             Site::Toph => toph::login(driver, cookies).await,
         }
     }

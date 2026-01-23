@@ -67,8 +67,16 @@ pub async fn submit(
     driver.maximize_window().await?;
     driver.goto(&url).await?;
     tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+    if let Ok(close_btn) = driver.find(By::ClassName("_crossButton_ov6b9_29")).await {
+        close_btn.click().await?;
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
     let language_select = driver.find(By::Id("language-select")).await?;
-    language_select.click().await?;
+    driver
+        .action_chain()
+        .move_to_element_center(&language_select)
+        .perform()
+        .await?;
     driver.action_chain().send_keys(language).perform().await?;
     let center = language_select.rect().await?.icenter();
     driver
@@ -88,9 +96,14 @@ pub async fn submit(
         )
         .await?;
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    driver.find(By::Id("submit_btn")).await?.click().await?;
-    let mut stdout = std::io::stdout();
+    driver
+        .action_chain()
+        .move_to_element_center(&driver.find(By::Id("submit_btn")).await?)
+        .click()
+        .perform()
+        .await?;
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    let mut stdout = std::io::stdout();
     driver
         .find(By::Id("vertical-tab-panel-1"))
         .await?

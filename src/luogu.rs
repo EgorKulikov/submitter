@@ -1,10 +1,12 @@
 #![allow(dead_code)]
 
 use crate::{clear, save_source};
+use clipboard::{ClipboardContext, ClipboardProvider};
 use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
 use dialoguer::{Input, Password};
+use html_escape::encode_text;
 use std::collections::BTreeSet;
 use std::path::Path;
 use thirtyfour::error::{WebDriverErrorInner, WebDriverResult};
@@ -21,14 +23,7 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
         return Ok(driver.get_all_cookies().await?);
     }
     let inputs = driver.find_all(By::Tag("input")).await?;
-    let captchas = driver.find_all(By::Tag("img")).await?;
-    for captcha in captchas {
-        if let Some(src) = captcha.attr("src").await? {
-            if src.contains("captcha") {
-                captcha.screenshot(&Path::new("captcha.png")).await?;
-            }
-        }
-    }
+    let buttons = driver.find_all(By::Tag("button")).await?;
     let login: String = Input::with_theme(&dialoguer::theme::ColorfulTheme::default())
         .with_prompt("Enter your luogo login")
         .interact_on(&Term::stdout())
@@ -37,11 +32,27 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
         .with_prompt("Enter your luogo password")
         .interact_on(&Term::stdout())
         .unwrap();
+    inputs[0].send_keys(&login).await?;
+    buttons[0].click().await?;
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    let inputs = driver.find_all(By::Tag("input")).await?;
+    let buttons = driver.find_all(By::Tag("button")).await?;
+    inputs[0].send_keys(&password).await?;
+    let captchas = driver.find_all(By::Tag("img")).await?;
+    for captcha in captchas {
+        if let Some(src) = captcha.attr("src").await? {
+            if src.contains("captcha") {
+                captcha.screenshot(&Path::new("captcha.png")).await?;
+            }
+        }
+    }
     let captcha: String = Input::with_theme(&dialoguer::theme::ColorfulTheme::default())
         .with_prompt("Enter the captcha from captcha.png")
         .interact_on(&Term::stdout())
         .unwrap();
-    for input in inputs {
+    inputs[1].send_keys(&captcha).await?;
+    buttons[0].click().await?;
+    /*for input in inputs {
         if let Some(placeholder) = input.attr("placeholder").await? {
             match placeholder.as_str() {
                 "用户名、手机号或电子邮箱" => {
@@ -61,7 +72,7 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
         .find(By::ClassName("btn-login"))
         .await?
         .click()
-        .await?;
+        .await?;*/
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     Ok(driver.get_all_cookies().await?)
 }
@@ -73,12 +84,14 @@ pub async fn submit(
     source: String,
 ) -> WebDriverResult<()> {
     println!("Cannot change language on luogo, language of last submit would be used");
-    driver.goto(&url).await?;
-    driver.find(By::ClassName("solid")).await?.click().await?;
+    let submit_url = format!("{}#submit", url);
+    driver.goto(&submit_url).await?;
+    // driver.find(By::ClassName("solid")).await?.click().await?;
+    save_source(driver).await?;
     driver
         .execute(
             "document.getElementsByClassName('cm-content')[0].innerHTML = arguments[0];",
-            vec![serde_json::to_value(source).unwrap()],
+            vec![serde_json::to_value(encode_text(&source)).unwrap()],
         )
         .await?;
     let buttons = driver.find_all(By::Tag("button")).await?;
@@ -89,9 +102,18 @@ pub async fn submit(
         }
     }
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    driver.screenshot(&Path::new("screenshot.png")).await?;
-    save_source(driver).await?;
-    eprintln!("Url: {}", driver.current_url().await?);
+    if driver
+        .find(By::Id("--swal-problem-submit-icaptcha"))
+        .await
+        .is_ok()
+    {
+        println!("Cloudflare CAPTCHA enabled, cannot submit");
+        let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
+        ctx.set_contents(source).unwrap();
+        open::that(&submit_url).ok();
+        return Ok(());
+    }
+    // eprintln!("Url: {}", driver.current_url().await?);
     let mut url_printed = false;
     let mut last_verdict = "".to_string();
     let mut tries = 0;
@@ -101,7 +123,7 @@ pub async fn submit(
             if url.starts_with("https://www.luogu.com.cn/record/") {
                 clear(last_verdict.len());
                 last_verdict = String::new();
-                println!("Submission url {}", url);
+                println!("Submission url: {}", url);
                 url_printed = true;
             }
         }
