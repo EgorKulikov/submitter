@@ -1,6 +1,7 @@
 mod atcoder;
 mod codechef;
 mod codeforces;
+mod eolymp;
 mod luogu;
 mod toph;
 mod ucup;
@@ -146,6 +147,7 @@ async fn run(
         "contest.ucup.ac" => Site::UniversalCup,
         "luogu.com.cn" => Site::Luogu,
         "toph.co" => Site::Toph,
+        "eolymp.com" => Site::Eolymp,
         _ => {
             println!("Unsupported domain");
             return Ok(());
@@ -193,6 +195,7 @@ enum Site {
     UniversalCup,
     Luogu,
     Toph,
+    Eolymp,
 }
 
 impl Site {
@@ -211,6 +214,7 @@ impl Site {
             Site::UniversalCup => ucup::submit(driver, url, language, source).await,
             Site::Luogu => luogu::submit(driver, url, language, source).await,
             Site::Toph => toph::submit(driver, url, language, source).await,
+            Site::Eolymp => eolymp::submit(driver, url, language, source).await,
         }
     }
 
@@ -227,6 +231,7 @@ impl Site {
             Site::UniversalCup => ucup::login(driver, cookies).await,
             Site::Luogu => luogu::login(driver, cookies).await,
             Site::Toph => toph::login(driver, cookies).await,
+            Site::Eolymp => eolymp::login(driver, cookies).await,
         }
     }
 }
@@ -268,9 +273,11 @@ async fn set_value(driver: &WebDriver, element: WebElement, value: String) -> We
 }
 
 #[allow(dead_code)]
-async fn save_source(driver: &WebDriver) -> WebDriverResult<()> {
-    driver.screenshot(&Path::new("screenshot.png")).await?;
-    std::fs::write("source.html", driver.source().await?).unwrap();
+async fn save_source(driver: &WebDriver, id: usize) -> WebDriverResult<()> {
+    driver
+        .screenshot(&Path::new(&format!("screenshot{}.png", id)))
+        .await?;
+    std::fs::write(&format!("source{}.html", id), driver.source().await?).unwrap();
     Ok(())
 }
 

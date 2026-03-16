@@ -1,4 +1,4 @@
-use crate::{clear, save_source};
+use crate::clear;
 use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
@@ -30,7 +30,7 @@ pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<
         .interact_on(&Term::stdout())
         .unwrap();
     tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-    save_source(driver).await?;
+    // save_source(driver).await?;
     driver
         .find(By::Id("username"))
         .await?
@@ -65,7 +65,7 @@ pub async fn submit(
             contest_id, task_id
         ))
         .await?;
-    save_source(driver).await?;
+    // save_source(driver).await?;
     let (x, y) = driver
         .find(By::Id("select-lang"))
         .await?
@@ -95,7 +95,7 @@ pub async fn submit(
         )
         .await?;
     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    save_source(driver).await?;
+    // save_source(driver).await?;
     driver.find(By::Id("submit")).await?.click().await?;
     let mut last_verdict = "".to_string();
     let mut printed_url = false;

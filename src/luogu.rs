@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::{clear, save_source};
+use crate::clear;
 use clipboard::{ClipboardContext, ClipboardProvider};
 use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
@@ -87,7 +87,7 @@ pub async fn submit(
     let submit_url = format!("{}#submit", url);
     driver.goto(&submit_url).await?;
     // driver.find(By::ClassName("solid")).await?.click().await?;
-    save_source(driver).await?;
+    // save_source(driver).await?;
     driver
         .execute(
             "document.getElementsByClassName('cm-content')[0].innerHTML = arguments[0];",
