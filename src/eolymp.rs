@@ -265,6 +265,11 @@ impl EolympClient {
                 }
 
                 if verdict != "ACCEPTED" && named_groups.len() > 1 {
+                    // Print header line in red
+                    let _ = execute!(stdout, SetForegroundColor(color));
+                    println!("{}", display);
+                    let _ = execute!(stdout, ResetColor);
+                    // Print per-group lines with individual colors
                     for group in &named_groups {
                         let idx = group.get("index").and_then(|v| v.as_i64()).unwrap_or(0);
                         let gv = group
@@ -280,7 +285,9 @@ impl EolympClient {
                         };
 
                         if gv == "ACCEPTED" {
-                            display.push_str(&format!("\n  Group {}{}: Accepted", idx, score_str));
+                            let _ = execute!(stdout, SetForegroundColor(Color::Green));
+                            println!("  Group {}{}: Accepted", idx, score_str);
+                            let _ = execute!(stdout, ResetColor);
                         } else {
                             let short = match gv {
                                 "WRONG_ANSWER" => "Wrong Answer",
@@ -292,7 +299,6 @@ impl EolympClient {
                                 "" | "NO_VERDICT" => "Not tested",
                                 other => other,
                             };
-                            // Find first failing test in runs
                             let first_fail = group
                                 .get("runs")
                                 .and_then(|v| v.as_array())
@@ -309,19 +315,19 @@ impl EolympClient {
                                         .and_then(|r| r.get("index").and_then(|v| v.as_i64()))
                                         .map(|fail_idx| (fail_idx, total))
                                 });
+                            let _ = execute!(stdout, SetForegroundColor(Color::Red));
                             if let Some((fail_idx, total)) = first_fail {
-                                display.push_str(&format!(
-                                    "\n  Group {}{}: {} on test {}/{}",
+                                println!(
+                                    "  Group {}{}: {} on test {}/{}",
                                     idx, score_str, short, fail_idx, total
-                                ));
+                                );
                             } else {
-                                display.push_str(&format!(
-                                    "\n  Group {}{}: {}",
-                                    idx, score_str, short
-                                ));
+                                println!("  Group {}{}: {}", idx, score_str, short);
                             }
+                            let _ = execute!(stdout, ResetColor);
                         }
                     }
+                    return Ok(verdict.to_string());
                 } else if verdict != "ACCEPTED" && named_groups.len() == 1 {
                     // Single group — find first failing test
                     let group = &named_groups[0];

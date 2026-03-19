@@ -219,10 +219,6 @@ impl CodechefClient {
         solution_id: &str,
         accepted: bool,
     ) -> Result<(), String> {
-        if accepted {
-            return Ok(());
-        }
-
         let result = self
             .http
             .get_json(&format!("/api/submission-details/{}", solution_id));
@@ -232,47 +228,134 @@ impl CodechefClient {
                 .and_then(|v| v.as_str())
             {
                 let mut stdout = std::io::stdout();
-                let mut passed = 0;
-                let mut total = 0;
-                let mut first_fail_subtask = None;
-                let mut first_fail_task = None;
-                let mut first_fail_verdict = None;
 
-                let re = regex::Regex::new(
+                // Parse subtask results: Subtask Score: N% ... Result - VERDICT
+                // These span multiple lines, so we parse scores and results separately
+                let score_re = regex::Regex::new(r"Subtask Score: (\d+)%").unwrap();
+                let result_re =
+                    regex::Regex::new(r"Result -\s*</strong>\s*([^<]+)").unwrap();
+                let scores: Vec<String> = score_re
+                    .captures_iter(test_info)
+                    .map(|c| c[1].to_string())
+                    .collect();
+                let results: Vec<String> = result_re
+                    .captures_iter(test_info)
+                    .map(|c| c[1].trim().to_string())
+                    .collect();
+                let subtasks: Vec<(String, String)> = scores
+                    .into_iter()
+                    .zip(results.into_iter())
+                    .collect();
+
+                // Parse total score
+                let total_score = regex::Regex::new(r"Total Score = (\d+)%")
+                    .unwrap()
+                    .captures(test_info)
+                    .map(|c| c[1].to_string());
+
+                // Parse per-test results
+                let test_re = regex::Regex::new(
                     r"<tr class='(correct|wrong)'><td>([^<]*)</td><td>([^<]*)</td><td>([^<]*)",
                 )
                 .unwrap();
-                for cap in re.captures_iter(test_info) {
-                    total += 1;
-                    let status = &cap[1];
-                    if status == "correct" {
-                        passed += 1;
-                    } else if first_fail_subtask.is_none() {
-                        first_fail_subtask = Some(cap[2].to_string());
-                        first_fail_task = Some(cap[3].to_string());
+
+                if subtasks.len() > 1 {
+                    // Multiple subtasks — show per-subtask with colors
+                    if let Some(score) = &total_score {
+                        if !accepted {
+                            let _ = execute!(stdout, SetForegroundColor(Color::Red));
+                            println!("  Score: {}%", score);
+                            let _ = execute!(stdout, ResetColor);
+                        }
+                    }
+
+                    // Group tests by subtask number
+                    let mut subtask_tests: std::collections::BTreeMap<
+                        String,
+                        Vec<(String, String, String)>,
+                    > = std::collections::BTreeMap::new();
+                    for cap in test_re.captures_iter(test_info) {
+                        let status = cap[1].to_string();
+                        let subtask = cap[2].to_string();
+                        let task = cap[3].to_string();
                         let verdict_raw = &cap[4];
                         let verdict = verdict_raw
                             .split("<br")
                             .next()
                             .unwrap_or(verdict_raw)
-                            .trim();
-                        first_fail_verdict = Some(verdict.to_string());
+                            .trim()
+                            .to_string();
+                        subtask_tests
+                            .entry(subtask)
+                            .or_default()
+                            .push((status, task, verdict));
                     }
-                }
 
-                if total > 0 {
-                    let _ = execute!(stdout, SetForegroundColor(Color::Red));
-                    let mut info = format!("  {}/{} tests passed", passed, total);
-                    if let (Some(sub), Some(task), Some(verdict)) =
-                        (&first_fail_subtask, &first_fail_task, &first_fail_verdict)
-                    {
-                        info.push_str(&format!(
-                            ", first failure: subtask {} task {} ({})",
-                            sub, task, verdict
-                        ));
+                    for (i, (score, result)) in subtasks.iter().enumerate() {
+                        let sub_num = (i + 1).to_string();
+                        let is_passed = score != "0" || result.contains("Correct") || result.contains("Accepted");
+                        let color = if is_passed {
+                            Color::Green
+                        } else {
+                            Color::Red
+                        };
+
+                        let mut line = format!("  Subtask {} ({}%): {}", i + 1, score, result);
+
+                        // Find first failing test in this subtask
+                        if !is_passed {
+                            if let Some(tests) = subtask_tests.get(&sub_num) {
+                                let total = tests.len();
+                                let passed = tests.iter().filter(|(s, _, _)| s == "correct").count();
+                                if let Some((_, task, verdict)) =
+                                    tests.iter().find(|(s, _, _)| s == "wrong")
+                                {
+                                    line = format!(
+                                        "  Subtask {} ({}%): {} on task {} ({}/{} passed)",
+                                        i + 1, score, verdict, task, passed, total
+                                    );
+                                }
+                            }
+                        }
+
+                        let _ = execute!(stdout, SetForegroundColor(color));
+                        println!("{}", line);
+                        let _ = execute!(stdout, ResetColor);
                     }
-                    println!("{}", info);
-                    let _ = execute!(stdout, ResetColor);
+                } else if !accepted {
+                    // Single subtask — simple output
+                    let mut passed = 0;
+                    let mut total = 0;
+                    let mut first_fail_info = None;
+
+                    for cap in test_re.captures_iter(test_info) {
+                        total += 1;
+                        if &cap[1] == "correct" {
+                            passed += 1;
+                        } else if first_fail_info.is_none() {
+                            let verdict = cap[4]
+                                .split("<br")
+                                .next()
+                                .unwrap_or(&cap[4])
+                                .trim()
+                                .to_string();
+                            first_fail_info =
+                                Some((cap[2].to_string(), cap[3].to_string(), verdict));
+                        }
+                    }
+
+                    if total > 0 {
+                        let _ = execute!(stdout, SetForegroundColor(Color::Red));
+                        let mut info = format!("  {}/{} tests passed", passed, total);
+                        if let Some((sub, task, verdict)) = &first_fail_info {
+                            info.push_str(&format!(
+                                ", first failure: subtask {} task {} ({})",
+                                sub, task, verdict
+                            ));
+                        }
+                        println!("{}", info);
+                        let _ = execute!(stdout, ResetColor);
+                    }
                 }
             }
         }

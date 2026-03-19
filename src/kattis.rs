@@ -231,6 +231,11 @@ impl KattisClient {
                             groups.iter().filter_map(|g| g.max_score).sum();
                         display.push_str(&format!(" ({}/{})", total_score, total_max));
                     }
+                    // Print header line
+                    let _ = execute!(stdout, SetForegroundColor(Color::Red));
+                    println!("{}", display);
+                    let _ = execute!(stdout, ResetColor);
+                    // Print per-group lines with individual colors
                     for g in &groups {
                         let score_str = if has_scores {
                             format!(
@@ -241,19 +246,35 @@ impl KattisClient {
                         } else {
                             String::new()
                         };
-                        let status = if g.passed == g.total {
-                            format!("  Group {}{}: {}/{}", g.index, score_str, g.passed, g.total)
+                        let (line, line_color) = if g.passed == g.total {
+                            (
+                                format!("  Group {}{}: {}/{}", g.index, score_str, g.passed, g.total),
+                                Color::Green,
+                            )
                         } else if let Some(first_fail) = g.first_fail {
-                            format!(
-                                "  Group {}{}: failed on test {}/{}",
-                                g.index, score_str, first_fail, g.total
+                            (
+                                format!(
+                                    "  Group {}{}: failed on test {}/{}",
+                                    g.index, score_str, first_fail, g.total
+                                ),
+                                Color::Red,
                             )
                         } else {
-                            format!("  Group {}{}: {}/{}", g.index, score_str, g.passed, g.total)
+                            (
+                                format!("  Group {}{}: {}/{}", g.index, score_str, g.passed, g.total),
+                                Color::Red,
+                            )
                         };
-                        display.push('\n');
-                        display.push_str(&status);
+                        let _ = execute!(stdout, SetForegroundColor(line_color));
+                        println!("{}", line);
+                        let _ = execute!(stdout, ResetColor);
                     }
+                    // Skip the single println below
+                    println!(
+                        "Submission url: https://{}/submissions/{}",
+                        self.hostname, submission_id
+                    );
+                    return Ok(verdict_name.to_string());
                 } else {
                     // Single group or no group info — use the JSON test results
                     let test_details = parse_test_results(row_html);
