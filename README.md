@@ -1,10 +1,10 @@
 # submitter
 
-Tool to submit to online judges dirrectly from command line
+Tool to submit solutions to online judges directly from the command line.
 
 ## Prerequisites
 
-You would need [rust](https://www.rust-lang.org/tools/install) and [docker](https://docs.docker.com/desktop/)
+You need [Rust](https://www.rust-lang.org/tools/install).
 
 ## Installation
 
@@ -16,19 +16,71 @@ cargo install --git https://github.com/EgorKulikov/submitter
 
 ```
 submitter <task url> <language> <path to solution>
+submitter login <site>
 ```
+
+Credentials are prompted on first use and saved for subsequent runs in `.submitter_cookies.json`.
+
+### Pre-contest login
+
+Use `submitter login <site>` to authenticate before a contest starts, so you don't waste time during the contest:
+
+```bash
+submitter login ucup
+submitter login codeforces
+submitter login eolymp
+submitter login yandex
+```
+
+Accepted short names: `cf`, `codeforces`, `cc`, `codechef`, `ucup`, `uoj`, `yandex`, `ya`, `toph`, `kattis`, `eolymp`, `eol`. Full URLs also work.
 
 ## Supported sites
 
-At the moment the following is supported:
+| Site | Submit | Verdict | Auth |
+|------|--------|---------|------|
+| [Codeforces](https://codeforces.com) | via browser (opens page, copies to clipboard) | API polling | API key + secret |
+| [CodeChef](https://codechef.com) | API | API | username + password |
+| [Yandex Contest](https://contest.yandex.com) | API | API | OAuth (device code flow) |
+| [UOJ](https://uoj.ac) / [UCup](https://contest.ucup.ac) | HTTP | HTTP | username + password |
+| [Toph](https://toph.co) | API | API | username + password |
+| [Kattis](https://open.kattis.com) | API | API | username + token (.kattisrc) |
+| [Eolymp](https://eolymp.com) | API | API | API key |
 
-- Codeforces
-- Codechef
-- Yandex Contest
-- AtCoder
-- Universal Cup
-- Toph*
+### Notes
 
-*no support for specifying language, language of the last submit is used
+- **Codeforces**: requires API key and secret from https://codeforces.com/settings/api
+- **Yandex Contest**: on first use, opens browser to authorize via Yandex account
+- **Kattis**: download your `.kattisrc` from https://open.kattis.com/download/kattisrc and place it in your project or home directory
+- **Eolymp**: requires API key from https://eolymp.com/developer with scopes: `atlas:problem:read`, `atlas:submission:read`, `atlas:submission:write`, `judge:contest:read`, `judge:contest:participate`
+- **AtCoder** and **Luogu** are not supported due to Cloudflare protection
 
-Luogu support is discontinued due to cloudflare captcha
+## Examples
+
+```bash
+# Codeforces
+submitter "https://codeforces.com/contest/1/problem/A" "C++" solution.cpp
+
+# CodeChef
+submitter "https://www.codechef.com/problems/TEST" "C++" solution.cpp
+
+# Yandex Contest
+submitter "https://contest.yandex.com/contest/3/problems/B/" "C++" solution.cpp
+
+# UOJ
+submitter "https://uoj.ac/problem/1" "C++14" solution.cpp
+
+# UCup
+submitter "https://contest.ucup.ac/contest/1106/problem/A" "C++17" solution.cpp
+
+# Toph
+submitter "https://toph.co/p/add-them-up" "C++" solution.cpp
+
+# Kattis
+submitter "https://open.kattis.com/problems/hello" "C++" solution.cpp
+
+# Eolymp (archive)
+submitter "https://eolymp.com/en/problems/1" "C++" solution.cpp
+
+# Eolymp (contest)
+submitter "https://eolymp.com/en/contests/CONTEST_ID/problems/A" "C++" solution.cpp
+```
