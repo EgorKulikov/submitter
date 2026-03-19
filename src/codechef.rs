@@ -1,211 +1,419 @@
 use crate::clear;
+use crate::http::HttpClient;
 use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use dialoguer::console::Term;
 use dialoguer::{Input, Password};
-use thirtyfour::error::WebDriverResult;
-use thirtyfour::{By, Cookie, Key, WebDriver};
+use std::thread;
+use std::time::Duration;
 
-pub async fn login(driver: &WebDriver, cookies: Vec<Cookie>) -> WebDriverResult<Vec<Cookie>> {
-    driver.goto("https://codechef.com/").await?;
-    driver.delete_all_cookies().await?;
-    for cookie in cookies {
-        driver.add_cookie(cookie).await?;
-    }
-    driver.goto("https://codechef.com/").await?;
-    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-    let source = driver.source().await?;
-    if !source.contains("Sign Up") {
-        return Ok(driver.get_all_cookies().await?);
-    }
-    driver.goto("https://www.codechef.com/login").await?;
-    let login: String = Input::with_theme(&dialoguer::theme::ColorfulTheme::default())
-        .with_prompt("Enter your codechef login")
-        .interact_on(&Term::stdout())
-        .unwrap();
-    let password: String = Password::with_theme(&dialoguer::theme::ColorfulTheme::default())
-        .with_prompt("Enter your codechef password")
-        .interact_on(&Term::stdout())
-        .unwrap();
-    driver
-        .action_chain()
-        .send_keys(login)
-        .send_keys(Key::Tab)
-        .perform()
-        .await?;
-    driver
-        .action_chain()
-        .send_keys(password)
-        .send_keys(Key::Tab)
-        .perform()
-        .await?;
-    driver.action_chain().send_keys(" ").perform().await?;
-    for _ in 0..10 {
-        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-        if !driver
-            .find(By::Tag("title"))
-            .await?
-            .text()
-            .await?
-            .starts_with("CodeChef Login")
-        {
-            return Ok(driver.get_all_cookies().await?);
-        }
-    }
-    eprintln!("Failed to login");
-    Err(thirtyfour::error::WebDriverError::ParseError(
-        "Failed to login".to_string(),
-    ))
+pub struct CodechefClient {
+    http: HttpClient,
+    csrf_token: Option<String>,
 }
 
-pub async fn submit(
-    driver: &WebDriver,
-    url: String,
-    language: String,
-    source: String,
-) -> WebDriverResult<()> {
-    driver.maximize_window().await?;
-    driver.goto(&url).await?;
-    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-    if let Ok(close_btn) = driver.find(By::ClassName("_crossButton_ov6b9_29")).await {
-        close_btn.click().await?;
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+impl CodechefClient {
+    pub fn http_mut(&mut self) -> &mut HttpClient {
+        &mut self.http
     }
-    let language_select = driver.find(By::Id("language-select")).await?;
-    driver
-        .action_chain()
-        .move_to_element_center(&language_select)
-        .perform()
-        .await?;
-    driver.action_chain().send_keys(language).perform().await?;
-    let center = language_select.rect().await?.icenter();
-    driver
-        .action_chain()
-        .move_to(center.0, center.1 + 80)
-        .click()
-        .perform()
-        .await?;
-    driver
-        .execute(
-            "\
-        var editordiv = document.getElementById(\"submit-ide-v2\");\
-        var editor = ace.edit(editordiv);\
-        editor.setValue(arguments[0]);\
-    ",
-            vec![serde_json::to_value(source).unwrap()],
-        )
-        .await?;
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    driver
-        .action_chain()
-        .move_to_element_center(&driver.find(By::Id("submit_btn")).await?)
-        .click()
-        .perform()
-        .await?;
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-    let mut stdout = std::io::stdout();
-    driver
-        .find(By::Id("vertical-tab-panel-1"))
-        .await?
-        .click()
-        .await?;
-    let id = loop {
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        let tbody = driver.find_all(By::Tag("tbody")).await?;
-        if tbody.is_empty() {
-            continue;
+
+    pub fn new() -> Self {
+        let mut http = HttpClient::new("https://www.codechef.com");
+        http.set_header("X-Requested-With", "XMLHttpRequest");
+        CodechefClient {
+            http,
+            csrf_token: None,
         }
-        let divs = tbody.last().unwrap().find_all(By::Tag("div")).await?;
-        if divs.len() > 1 {
-            break divs[1].text().await?;
+    }
+
+    fn update_csrf_header(&mut self) {
+        if let Some(token) = &self.csrf_token {
+            self.http.set_header("x-csrf-token", token);
         }
-    };
-    driver
-        .goto(&format!("https://www.codechef.com/viewsolution/{}", id))
-        .await?;
-    println!(
-        "Submission url https://www.codechef.com/viewsolution/{}",
-        id
-    );
-    let _ = execute!(stdout, SetForegroundColor(Color::Yellow));
-    print!("Judging");
-    let _ = execute!(stdout, ResetColor);
-    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-    loop {
-        let Ok(verdict) = driver
-            .find(By::ClassName("_status__container_1xnpw_48"))
-            .await
-        else {
-            driver.refresh().await?;
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-            continue;
-        };
-        if verdict.text().await?.starts_with("Submission Queued") {
-            driver.refresh().await?;
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-            continue;
+    }
+
+    fn fetch_csrf_token(&mut self) -> Result<(), String> {
+        let body = self.http.get_text("/")?;
+        self.csrf_token = extract_csrf_token(&body);
+        self.update_csrf_header();
+        if self.csrf_token.is_none() {
+            return Err("Could not find CSRF token".to_string());
         }
-        clear(7);
-        let full_verdict = verdict.find(By::Tag("span")).await?.text().await?;
-        let accepted = full_verdict.contains("Correct Answer")
-            || full_verdict.contains("You got it right!")
-            || full_verdict.contains("Excellent work!")
-            || full_verdict.contains("Awesome, you nailed it!");
-        let _ = execute!(
-            stdout,
-            SetForegroundColor(if accepted { Color::Green } else { Color::Red })
-        );
-        println!("{}", full_verdict);
-        let _ = execute!(stdout, ResetColor);
-        if full_verdict == "Compilation Error".to_string() {
+        Ok(())
+    }
+
+    fn is_logged_in(&mut self) -> Result<bool, String> {
+        let body = self.http.get_text("/")?;
+        self.csrf_token = extract_csrf_token(&body);
+        self.update_csrf_header();
+        Ok(!body.contains("Sign Up"))
+    }
+
+    fn login(&mut self) -> Result<(), String> {
+        if self.is_logged_in()? {
+            println!("Already logged in");
             return Ok(());
         }
-        let mut tries = 0;
-        let table = loop {
-            match driver.find(By::ClassName("status-table")).await {
-                Ok(table) => break table,
-                Err(_) => {
-                    tries += 1;
-                    if tries > 20 {
-                        return Ok(());
-                    }
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        let login: String = Input::with_theme(&dialoguer::theme::ColorfulTheme::default())
+            .with_prompt("Enter your CodeChef login")
+            .interact_on(&Term::stdout())
+            .unwrap();
+        let password: String = Password::with_theme(&dialoguer::theme::ColorfulTheme::default())
+            .with_prompt("Enter your CodeChef password")
+            .interact_on(&Term::stdout())
+            .unwrap();
+
+        self.login_with_credentials(&login, &password)
+    }
+
+    pub fn login_with_credentials(&mut self, username: &str, password: &str) -> Result<(), String> {
+        // Clear stale cookies to ensure clean login
+        self.http.clear_cookies();
+
+        self.fetch_csrf_token()?;
+
+        // Step 1: GET the login form to obtain form_build_id and form's csrfToken
+        let form_json = self.http.post_form_json("/api/codechef/login", &[])?;
+        let form_html = form_json
+            .as_str()
+            .ok_or("Login form response is not a string")?;
+
+        let form_build_id = extract_form_field(form_html, "form_build_id")
+            .ok_or("Could not find form_build_id in login form")?;
+        let form_csrf = extract_form_field(form_html, "csrfToken")
+            .or_else(|| self.csrf_token.clone())
+            .ok_or("No CSRF token")?;
+
+        // Step 2: POST the login form
+        let result = self.http.post_form_json(
+            "/api/codechef/login",
+            &[
+                ("name", username),
+                ("pass", password),
+                ("csrfToken", &form_csrf),
+                ("form_build_id", &form_build_id),
+                ("form_id", "ajax_login_form"),
+            ],
+        )?;
+
+        if result.get("status").and_then(|v| v.as_str()) == Some("success") {
+            println!("Login successful");
+            self.fetch_csrf_token()?;
+            Ok(())
+        } else {
+            let errors = result
+                .get("errors")
+                .or_else(|| result.get("message"))
+                .map(|v| format!("{}", v))
+                .unwrap_or_else(|| format!("{}", result));
+            Err(format!("Login failed: {}", errors))
+        }
+    }
+
+    pub fn find_language_id(&mut self, language: &str) -> Result<(String, String), String> {
+        let result = self.http.get_json("/api/ide/all/languages/all")?;
+        let languages = result
+            .get("languages")
+            .ok_or("No languages in response")?;
+
+        let lang_lower = language.to_lowercase();
+
+        if let Some(arr) = languages.as_array() {
+            for info in arr {
+                let id = info.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                let full_name = info.get("full_name").and_then(|v| v.as_str()).unwrap_or("");
+                let short_name = info.get("short_name").and_then(|v| v.as_str()).unwrap_or("");
+                if full_name.to_lowercase().starts_with(&lang_lower)
+                    || short_name.to_lowercase().starts_with(&lang_lower)
+                {
+                    return Ok((id.to_string(), full_name.to_string()));
                 }
             }
-        };
-        let rows = table.find_all(By::Tag("tr")).await?;
-        println!("Subtask Task Result");
-        for row in rows.into_iter().skip(1) {
-            if row.class_name().await? == Some("skip".to_string())
-                || row.class_name().await? == Some("subtask-result".to_string())
-            {
-                continue;
-            }
-            let is_accepted = row.class_name().await? == Some("correct".to_string());
-            let cells = row.find_all(By::Tag("td")).await?;
-            if cells.len() < 3 {
-                continue;
-            }
-            let subtask = cells[0].text().await?;
-            let task = cells[1].text().await?;
-            let result = cells[2]
-                .text()
-                .await?
-                .replace("\n", "")
-                .replace("\"", "")
-                .replace("<br>", " ");
-            let _ = execute!(
-                stdout,
-                SetForegroundColor(if is_accepted {
-                    Color::Green
-                } else {
-                    Color::Red
-                })
-            );
-            println!("{:7} {:4} {}", subtask, task, result);
-            let _ = execute!(stdout, ResetColor);
         }
-        break;
+        Err(format!("Language '{}' not found", language))
     }
-    Ok(())
+
+    pub fn submit_solution(
+        &mut self,
+        problem_code: &str,
+        contest_code: &str,
+        language_id: &str,
+        source: &str,
+    ) -> Result<String, String> {
+        let result = self.http.post_form_json(
+            "/api/ide/submit",
+            &[
+                ("sourceCode", source),
+                ("language", language_id),
+                ("problemCode", problem_code),
+                ("contestCode", contest_code),
+            ],
+        )?;
+
+        if result.get("status").and_then(|v| v.as_str()) == Some("error") {
+            let errors = result
+                .get("errors")
+                .map(|v| format!("{}", v))
+                .unwrap_or_else(|| format!("{}", result));
+            return Err(format!("Submit failed: {}", errors));
+        }
+
+        result
+            .get("upid")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| result.get("upid").and_then(|v| v.as_i64()).map(|n| n.to_string()))
+            .ok_or_else(|| format!("No submission ID in response: {}", result))
+    }
+
+    pub fn poll_verdict(&mut self, solution_id: &str) -> Result<String, String> {
+        let mut stdout = std::io::stdout();
+        let _ = execute!(stdout, SetForegroundColor(Color::Yellow));
+        print!("Judging");
+        let _ = execute!(stdout, ResetColor);
+        let last_len = 7; // "Judging"
+
+        loop {
+            thread::sleep(Duration::from_secs(3));
+
+            let result =
+                self.http
+                    .get_json(&format!("/api/ide/submit?solution_id={}", solution_id))?;
+
+            let result_code = result
+                .get("result_code")
+                .and_then(|v| v.as_str())
+                .unwrap_or("wait");
+
+            if result_code == "wait" {
+                continue;
+            }
+
+            clear(last_len);
+
+            let (color, verdict_text) = match result_code {
+                "accepted" => (Color::Green, "Accepted"),
+                "wrong" => (Color::Red, "Wrong Answer"),
+                "compile" => (Color::Red, "Compilation Error"),
+                "runtime" => (Color::Red, "Runtime Error"),
+                "time" => (Color::Red, "Time Limit Exceeded"),
+                "partial_accepted" => (Color::DarkYellow, "Partially Correct"),
+                _ => (Color::Red, result_code),
+            };
+
+            let _ = execute!(stdout, SetForegroundColor(color));
+            println!("{}", verdict_text);
+            let _ = execute!(stdout, ResetColor);
+
+            if result_code != "compile" {
+                self.fetch_subtask_details(solution_id, result_code == "accepted")?;
+            }
+
+            return Ok(result_code.to_string());
+        }
+    }
+
+    fn fetch_subtask_details(
+        &mut self,
+        solution_id: &str,
+        accepted: bool,
+    ) -> Result<(), String> {
+        if accepted {
+            return Ok(());
+        }
+
+        let result = self
+            .http
+            .get_json(&format!("/api/submission-details/{}", solution_id));
+        if let Ok(details) = result {
+            if let Some(test_info) = details
+                .pointer("/data/other_details/testInfo")
+                .and_then(|v| v.as_str())
+            {
+                let mut stdout = std::io::stdout();
+                let mut passed = 0;
+                let mut total = 0;
+                let mut first_fail_subtask = None;
+                let mut first_fail_task = None;
+                let mut first_fail_verdict = None;
+
+                let re = regex::Regex::new(
+                    r"<tr class='(correct|wrong)'><td>([^<]*)</td><td>([^<]*)</td><td>([^<]*)",
+                )
+                .unwrap();
+                for cap in re.captures_iter(test_info) {
+                    total += 1;
+                    let status = &cap[1];
+                    if status == "correct" {
+                        passed += 1;
+                    } else if first_fail_subtask.is_none() {
+                        first_fail_subtask = Some(cap[2].to_string());
+                        first_fail_task = Some(cap[3].to_string());
+                        let verdict_raw = &cap[4];
+                        let verdict = verdict_raw
+                            .split("<br")
+                            .next()
+                            .unwrap_or(verdict_raw)
+                            .trim();
+                        first_fail_verdict = Some(verdict.to_string());
+                    }
+                }
+
+                if total > 0 {
+                    let _ = execute!(stdout, SetForegroundColor(Color::Red));
+                    let mut info = format!("  {}/{} tests passed", passed, total);
+                    if let (Some(sub), Some(task), Some(verdict)) =
+                        (&first_fail_subtask, &first_fail_task, &first_fail_verdict)
+                    {
+                        info.push_str(&format!(
+                            ", first failure: subtask {} task {} ({})",
+                            sub, task, verdict
+                        ));
+                    }
+                    println!("{}", info);
+                    let _ = execute!(stdout, ResetColor);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn extract_form_field(html: &str, field_name: &str) -> Option<String> {
+    let escaped_pattern = format!("name=\\\\\"{}\\\\\"", field_name);
+    let plain_pattern = format!("name=\"{}\"", field_name);
+
+    let search = if html.contains(&escaped_pattern) {
+        &escaped_pattern
+    } else if html.contains(&plain_pattern) {
+        &plain_pattern
+    } else {
+        return None;
+    };
+
+    let pos = html.find(search)?;
+    let after = &html[pos..];
+
+    for (val_start, quote_end) in [("value=\\\\\"", "\\\\\""), ("value=\"", "\"")] {
+        if let Some(vpos) = after.find(val_start) {
+            let start = vpos + val_start.len();
+            if let Some(end) = after[start..].find(quote_end) {
+                return Some(after[start..start + end].to_string());
+            }
+        }
+    }
+    None
+}
+
+fn extract_csrf_token(html: &str) -> Option<String> {
+    if let Some(pos) = html.find("window.csrfToken") {
+        let after = &html[pos..];
+        for quote in ['"', '\''] {
+            let pattern = format!("= {}", quote);
+            if let Some(eq_pos) = after.find(&pattern) {
+                let start = eq_pos + pattern.len();
+                if let Some(end) = after[start..].find(quote) {
+                    return Some(after[start..start + end].to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+fn parse_url(url: &str) -> Option<(String, String)> {
+    let url = url.trim_end_matches('/');
+
+    if let Some(pos) = url.find("/submit/") {
+        let problem = &url[pos + 8..];
+        let problem = problem.split('/').next().unwrap_or(problem);
+        let problem = problem.split('?').next().unwrap_or(problem);
+        let before = &url[..pos];
+        let contest = before
+            .rsplit('/')
+            .next()
+            .filter(|s| {
+                s.chars().all(|c| c.is_alphanumeric())
+                    && !s.is_empty()
+                    && *s != "com"
+                    && !s.starts_with("http")
+            })
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "PRACTICE".to_string());
+        return Some((contest, problem.to_string()));
+    }
+
+    if let Some(pos) = url.find("/problems/") {
+        let problem = &url[pos + 10..];
+        let problem = problem.split('/').next().unwrap_or(problem);
+        let problem = problem.split('?').next().unwrap_or(problem);
+        let before = &url[..pos];
+        let contest = before
+            .rsplit('/')
+            .next()
+            .filter(|s| {
+                s.chars().all(|c| c.is_alphanumeric() || c == '_')
+                    && !s.is_empty()
+                    && *s != "com"
+                    && !s.starts_with("http")
+            })
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "PRACTICE".to_string());
+        return Some((contest, problem.to_string()));
+    }
+
+    None
+}
+
+pub fn login() {
+    let mut client = CodechefClient::new();
+    if let Err(e) = client.login() {
+        eprintln!("Login failed: {}", e);
+    }
+}
+
+pub fn submit(url: String, language: String, source: String) {
+    let mut client = CodechefClient::new();
+
+    println!("Logging in");
+    if let Err(e) = client.login() {
+        eprintln!("Login failed: {}", e);
+        return;
+    }
+
+    let (contest_code, problem_code) = match parse_url(&url) {
+        Some(parsed) => parsed,
+        None => {
+            eprintln!("Could not parse URL: {}", url);
+            return;
+        }
+    };
+
+    let (lang_id, lang_name) = match client.find_language_id(&language) {
+        Ok(found) => found,
+        Err(e) => {
+            eprintln!("{}", e);
+            return;
+        }
+    };
+    println!("Language: {} (id={})", lang_name, lang_id);
+
+    println!("Submitting");
+    let solution_id =
+        match client.submit_solution(&problem_code, &contest_code, &lang_id, &source) {
+            Ok(id) => id,
+            Err(e) => {
+                eprintln!("{}", e);
+                return;
+            }
+        };
+    println!(
+        "Submission url: https://www.codechef.com/viewsolution/{}",
+        solution_id
+    );
+
+    if let Err(e) = client.poll_verdict(&solution_id) {
+        eprintln!("Verdict polling failed: {}", e);
+    }
 }

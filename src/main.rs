@@ -1,294 +1,122 @@
-mod atcoder;
-mod codechef;
-mod codeforces;
-mod eolymp;
-mod luogu;
-mod toph;
-mod ucup;
-mod yandex;
-
 use regex::Regex;
-use serde::Deserialize;
-use std::collections::HashMap;
 use std::env;
 use std::fs::read_to_string;
-use std::path::Path;
-use std::process::Command;
-use std::time::Duration;
-use thirtyfour::prelude::*;
-use which::which;
+use submitter::{codechef, codeforces, eolymp, kattis, toph, ucup, yandex};
 
-#[tokio::main]
-async fn main() -> WebDriverResult<()> {
+fn site_key_from_url(url: &str) -> Option<String> {
+    let url_regex = Regex::new(r"https?://(?:www\.)?([^/]+).*").unwrap();
+    let domain = url_regex.captures(url)?[1].to_string();
+    let domain_parts: Vec<&str> = domain.split('.').collect();
+    if domain_parts.len() >= 2 {
+        Some(format!(
+            "{}.{}",
+            domain_parts[domain_parts.len() - 2],
+            domain_parts[domain_parts.len() - 1]
+        ))
+    } else {
+        Some(domain)
+    }
+}
+
+fn short_name_to_site_key(name: &str) -> Option<String> {
+    let key = match name.to_lowercase().as_str() {
+        "cf" | "codeforces" => "codeforces.com",
+        "cc" | "codechef" => "codechef.com",
+        "ucup" => "ucup.ac",
+        "uoj" => "uoj.ac",
+        "qoj" => "qoj.ac",
+        "yandex" | "ya" => "yandex.ru",
+        "toph" => "toph.co",
+        "kattis" => "kattis.com",
+        "eolymp" | "eol" => "eolymp.com",
+        _ => return None,
+    };
+    Some(key.to_string())
+}
+
+fn do_login(site_key: &str) {
+    match site_key {
+        "codeforces.com" => codeforces::login(),
+        "ucup.ac" => ucup::login(),
+        "uoj.ac" | "qoj.ac" => {
+            let (base, name) = if site_key == "qoj.ac" {
+                ("https://qoj.ac", "QOJ")
+            } else {
+                ("https://uoj.ac", "UOJ")
+            };
+            let mut client = submitter::uoj::UojClient::new(base, name);
+            if let Err(e) = client.login() {
+                eprintln!("Login failed: {}", e);
+            }
+        }
+        "yandex.com" | "yandex.ru" => yandex::login(),
+        "codechef.com" => codechef::login(),
+        "toph.co" => toph::login(),
+        "kattis.com" => kattis::login(),
+        "eolymp.com" => eolymp::login(),
+        _ => eprintln!("Unsupported site: {}", site_key),
+    }
+}
+
+fn main() {
     let args: Vec<_> = env::args().collect();
+
+    if args.len() == 3 && args[1] == "login" {
+        let site = &args[2];
+        let key = short_name_to_site_key(site)
+            .or_else(|| site_key_from_url(site));
+        match key {
+            Some(key) => do_login(&key),
+            None => eprintln!("Unknown site: {}", site),
+        }
+        return;
+    }
+
     if args.len() != 4 {
         println!("Usage: submitter <url> <language> <file>");
-        return Ok(());
+        println!("       submitter login <url>");
+        return;
     }
+
     let url = &args[1];
     let language = &args[2];
     let file = &args[3];
     let source = read_to_string(file).unwrap();
 
-    let url_regex = Regex::new(r"https?://(?:www\.)?([^/]+).*").unwrap();
-    let domain = {
-        match url_regex.captures(url) {
-            None => {
-                println!("Unexpected URL");
-                return Ok(());
+    let site_key = match site_key_from_url(url) {
+        Some(key) => key,
+        None => {
+            println!("Unexpected URL");
+            return;
+        }
+    };
+
+    match site_key.as_str() {
+        "codeforces.com" => codeforces::submit(url.clone(), source),
+        "ucup.ac" => ucup::submit(url.clone(), language.clone(), source),
+        "uoj.ac" | "qoj.ac" => {
+            let (base, name, domain_str) = if site_key == "qoj.ac" {
+                ("https://qoj.ac", "QOJ", "qoj.ac")
+            } else {
+                ("https://uoj.ac", "UOJ", "uoj.ac")
+            };
+            let mut client = submitter::uoj::UojClient::new(base, name);
+            println!("Logging in");
+            if let Err(e) = client.login() {
+                eprintln!("Login failed: {}", e);
+                return;
             }
-            Some(caps) => caps[1].to_string(),
-        }
-    };
-    if domain.ends_with("codeforces.com") {
-        codeforces::submit(url.clone(), source);
-        return Ok(());
-    }
-
-    let caps = DesiredCapabilities::chrome();
-
-    let driver = match WebDriver::new("http://localhost:4444", caps.clone()).await {
-        Ok(driver) => driver,
-        Err(_) => {
-            if which("docker").is_err() {
-                println!("Please install docker");
-                return Ok(());
+            let path = url.find(domain_str).map(|p| &url[p + domain_str.len()..]).unwrap_or("/");
+            println!("Submitting");
+            if let Err(e) = client.submit(path, &language, &source) {
+                eprintln!("Submit failed: {}", e);
             }
-            println!("Selenium is not running, starting");
-            let mut command = Command::new("docker");
-            command.args(&[
-                "run",
-                "--rm",
-                "-d",
-                "-p",
-                "4444:4444",
-                "--name",
-                "selenium-server",
-                "-v",
-                "//dev/shm:/dev/shm",
-                "selenium/standalone-chrome:latest",
-            ]);
-            command.status().unwrap();
-            println!("Waiting for selenium to start");
-            tokio::time::sleep(Duration::from_secs(5)).await;
-            WebDriver::new("http://localhost:4444", caps).await?
         }
-    };
-
-    run(&driver, &url, &language, &source).await?;
-
-    driver.quit().await?;
-    Ok(())
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct BrowserCookie {
-    domain: String,
-    expiration_date: Option<f64>,
-    host_only: bool,
-    http_only: bool,
-    name: String,
-    path: String,
-    same_site: String,
-    secure: bool,
-    session: bool,
-    store_id: String,
-    value: String,
-    id: i32,
-}
-
-async fn run(
-    driver: &WebDriver,
-    url: &String,
-    language: &String,
-    source: &String,
-) -> WebDriverResult<()> {
-    let cookies_string = read_to_string("cookies.json").unwrap_or("{}".to_string());
-    /*    let cookies: HashMap<String, Vec<BrowserCookie>> =
-        serde_json::from_str(&cookies_string).unwrap();
-    let all_cookies = cookies
-        .into_iter()
-        .map(|(domain, cookies)| {
-            let cookies = cookies
-                .into_iter()
-                .map(|cookie| {
-                    let mut new_cookie = Cookie::new(cookie.name.clone(), cookie.value.clone());
-                    new_cookie.set_domain(cookie.domain.clone());
-                    new_cookie.set_path(cookie.path.clone());
-                    if let Some(expiration_date) = cookie.expiration_date {
-                        new_cookie.set_expiry(expiration_date as i64);
-                    }
-                    new_cookie.set_secure(cookie.secure);
-                    new_cookie
-                })
-                .collect::<Vec<_>>();
-            (domain, cookies)
-        })
-        .collect::<HashMap<_, _>>();*/
-    let mut all_cookies: HashMap<String, Vec<Cookie>> =
-        serde_json::from_str(&cookies_string).unwrap_or(HashMap::new());
-    let url_regex = Regex::new(r"https?://(?:www\.)?([^/]+).*").unwrap();
-    let domain = {
-        match url_regex.captures(url) {
-            None => {
-                println!("Unexpected URL");
-                return Ok(());
-            }
-            Some(caps) => caps[1].to_string(),
-        }
-    };
-
-    let site = match domain.as_str() {
-        // "codeforces.com" => Site::Codeforces,
-        "codechef.com" => Site::Codechef,
-        // "contest.yandex.com" => Site::Yandex,
-        // "atcoder.jp" => Site::AtCoder,
-        "contest.ucup.ac" => Site::UniversalCup,
-        "luogu.com.cn" => Site::Luogu,
-        "toph.co" => Site::Toph,
-        "eolymp.com" => Site::Eolymp,
-        _ => {
-            println!("Unsupported domain");
-            return Ok(());
-        }
-    };
-
-    println!("Logging in");
-    match site
-        .login(&driver, all_cookies.get(&domain).cloned().unwrap_or(vec![]))
-        .await
-    {
-        Ok(cookies) => {
-            all_cookies.insert(domain, cookies.clone());
-            let cookies_string = serde_json::to_string(&all_cookies).unwrap();
-            std::fs::write("cookies.json", cookies_string).unwrap();
-        }
-        Err(err) => {
-            all_cookies.insert(domain, Vec::new());
-            let cookies_string = serde_json::to_string(&all_cookies).unwrap();
-            std::fs::write("cookies.json", cookies_string).unwrap();
-            eprintln!(
-                "Failed to login:\n{}\n{:?}",
-                driver.current_url().await?,
-                err
-            );
-            return Ok(());
-        }
-    };
-    /*    driver.goto(url).await?;
-    driver.delete_all_cookies().await?;
-    for cookie in all_cookies.get(&domain).cloned().unwrap_or(vec![]) {
-        driver.add_cookie(cookie).await?;
-    }*/
-    println!("Submitting");
-    site.submit(&driver, url.clone(), language.clone(), source.clone())
-        .await?;
-    Ok(())
-}
-
-enum Site {
-    // Codeforces,
-    Codechef,
-    // Yandex,
-    // AtCoder,
-    UniversalCup,
-    Luogu,
-    Toph,
-    Eolymp,
-}
-
-impl Site {
-    async fn submit(
-        &self,
-        driver: &WebDriver,
-        url: String,
-        language: String,
-        source: String,
-    ) -> WebDriverResult<()> {
-        match self {
-            // Site::Codeforces => codeforces::submit(driver, url, language, source).await,
-            Site::Codechef => codechef::submit(driver, url, language, source).await,
-            // Site::Yandex => yandex::submit(driver, url, language, source).await,
-            // Site::AtCoder => atcoder::submit(driver, url, language, source).await,
-            Site::UniversalCup => ucup::submit(driver, url, language, source).await,
-            Site::Luogu => luogu::submit(driver, url, language, source).await,
-            Site::Toph => toph::submit(driver, url, language, source).await,
-            Site::Eolymp => eolymp::submit(driver, url, language, source).await,
-        }
-    }
-
-    async fn login(
-        &self,
-        driver: &WebDriver,
-        cookies: Vec<Cookie>,
-    ) -> WebDriverResult<Vec<Cookie>> {
-        match self {
-            // Site::Codeforces => codeforces::login(driver, cookies).await,
-            Site::Codechef => codechef::login(driver, cookies).await,
-            // Site::Yandex => yandex::login(driver, cookies).await,
-            // Site::AtCoder => atcoder::login(driver, cookies).await,
-            Site::UniversalCup => ucup::login(driver, cookies).await,
-            Site::Luogu => luogu::login(driver, cookies).await,
-            Site::Toph => toph::login(driver, cookies).await,
-            Site::Eolymp => eolymp::login(driver, cookies).await,
-        }
-    }
-}
-
-async fn select_value(selector: WebElement, value: &str) -> WebDriverResult<bool> {
-    selector.focus().await?;
-    let mut last = selector.value().await?;
-    loop {
-        if last == Some(value.to_string()) {
-            return Ok(true);
-        }
-        selector.send_keys(Key::Down).await?;
-        if last == selector.value().await? {
-            break;
-        }
-        last = selector.value().await?;
-    }
-    loop {
-        if last == Some(value.to_string()) {
-            return Ok(true);
-        }
-        selector.send_keys(Key::Up).await?;
-        if last == selector.value().await? {
-            break;
-        }
-        last = selector.value().await?;
-    }
-    Ok(false)
-}
-
-async fn set_value(driver: &WebDriver, element: WebElement, value: String) -> WebDriverResult<()> {
-    driver
-        .execute(
-            "arguments[0].value = arguments[1];",
-            vec![element.to_json()?, serde_json::to_value(value).unwrap()],
-        )
-        .await?;
-    Ok(())
-}
-
-#[allow(dead_code)]
-async fn save_source(driver: &WebDriver, id: usize) -> WebDriverResult<()> {
-    driver
-        .screenshot(&Path::new(&format!("screenshot{}.png", id)))
-        .await?;
-    std::fs::write(&format!("source{}.html", id), driver.source().await?).unwrap();
-    Ok(())
-}
-
-fn clear(len: usize) {
-    for _ in 0..len {
-        print!("{}", 8u8 as char);
-    }
-    for _ in 0..len {
-        print!(" ");
-    }
-    for _ in 0..len {
-        print!("{}", 8u8 as char);
+        "yandex.com" | "yandex.ru" => yandex::submit(url.clone(), language.clone(), source),
+        "codechef.com" => codechef::submit(url.clone(), language.clone(), source),
+        "toph.co" => toph::submit(url.clone(), language.clone(), source),
+        "kattis.com" => kattis::submit(url.clone(), language.clone(), source, file.clone()),
+        "eolymp.com" => eolymp::submit(url.clone(), language.clone(), source),
+        _ => println!("Unsupported domain: {}", site_key),
     }
 }

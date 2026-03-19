@@ -7,11 +7,8 @@ use dialoguer::Input;
 use reqwest::blocking::Client;
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use rs_sha512::{HasherContext, Sha512State};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fs::File;
+use serde::Deserialize;
 use std::hash::{BuildHasher, Hasher};
-use std::io::BufReader;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -161,7 +158,6 @@ impl Submission {
     }
 }
 
-#[derive(Serialize, Deserialize)]
 struct Data {
     user: String,
     api_key: String,
@@ -169,9 +165,19 @@ struct Data {
 }
 
 fn read_data() -> Option<Data> {
-    let file = File::open(".cf_api.json").ok()?;
-    let reader = BufReader::new(file);
-    serde_json::from_reader(reader).ok()
+    let http = crate::http::HttpClient::new("https://codeforces.com");
+    Some(Data {
+        user: http.get_cookie("cf_user")?,
+        api_key: http.get_cookie("cf_api_key")?,
+        api_secret: http.get_cookie("cf_api_secret")?,
+    })
+}
+
+fn save_data(data: &Data) {
+    let mut http = crate::http::HttpClient::new("https://codeforces.com");
+    http.set_cookie("cf_user", &data.user);
+    http.set_cookie("cf_api_key", &data.api_key);
+    http.set_cookie("cf_api_secret", &data.api_secret);
 }
 
 fn get_data() -> Data {
@@ -192,8 +198,7 @@ fn get_data() -> Data {
         api_key,
         api_secret,
     };
-    let file = File::create(".cf_api.json").unwrap();
-    serde_json::to_writer(file, &data).unwrap();
+    save_data(&data);
     data
 }
 
@@ -239,6 +244,15 @@ fn url(method: String, mut params: Vec<(String, String)>, data: &Data) -> String
     url
 }
 
+pub fn login() {
+    if read_data().is_some() {
+        println!("Already logged in");
+    } else {
+        let _ = get_data();
+        println!("Credentials saved");
+    }
+}
+
 pub fn submit(task_url: String, source: String) {
     let data = if let Some(data) = read_data() {
         data
@@ -277,14 +291,16 @@ pub fn submit(task_url: String, source: String) {
         )
     };
     open::that(&submit_url).ok();
-    let mut submission_map = HashMap::new();
-    let mut last_id = None;
+    let mut known_ids: std::collections::HashSet<i64> = std::collections::HashSet::new();
+    let mut tracking_id: Option<i64> = None;
     let mut last_len = 0;
     let mut first = true;
     let mut stdout = std::io::stdout();
     let mut tries = 0;
+    let mut stale_count = 0;
+    let mut last_response = String::new();
     'outer: loop {
-        let url = url(
+        let api_url = url(
             "user.status".to_string(),
             vec![
                 ("handle".to_string(), data.user.clone()),
@@ -297,13 +313,26 @@ pub fn submit(task_url: String, source: String) {
             .timeout(None)
             .build()
             .unwrap()
-            .get(url)
+            .get(api_url)
             .header(ACCEPT, "application/json")
             .header(CONTENT_TYPE, "application/json")
             .send()
             .unwrap()
             .text()
             .unwrap();
+        // Detect stale/cached responses
+        if bytes == last_response {
+            stale_count += 1;
+            if stale_count >= 5 {
+                // API is returning cached data, wait longer
+                thread::sleep(Duration::from_secs(5));
+                stale_count = 0;
+                continue;
+            }
+        } else {
+            stale_count = 0;
+            last_response = bytes.clone();
+        }
         #[derive(Deserialize, Debug)]
         struct RequestResult {
             result: Vec<Submission>,
@@ -324,42 +353,40 @@ pub fn submit(task_url: String, source: String) {
                 }
             }
         };
-        let mut submissions = request_result.result;
-        for submission in submissions.into_iter() {
-            let updated = if let Some(old_submission) = submission_map.get(&submission.id) {
-                old_submission != &submission
-            } else {
-                true
-            };
-            if !first && !updated {
-                continue;
-            }
-            if updated {
-                if !first {
-                    let is_last_shown = last_id.map(|id| id == submission.id).unwrap_or(false);
-                    if is_last_shown {
-                        clear(last_len);
-                    } else {
-                        if last_id.is_some() {
-                            println!();
-                        }
-                        submission.print_header();
-                    }
-                    let (color, outcome) = submission.result();
-                    let _ = execute!(stdout, SetForegroundColor(color));
-                    print!("{}", outcome);
-                    let _ = execute!(stdout, ResetColor);
-                    if submission.is_final_result() {
-                        println!();
-                        last_id = None;
-                        last_len = 0;
-                        break 'outer;
-                    } else {
-                        last_id = Some(submission.id);
-                        last_len = outcome.len();
-                    }
+        for submission in request_result.result.into_iter() {
+            if first {
+                // Record all existing submission IDs
+                known_ids.insert(submission.id);
+            } else if let Some(tid) = tracking_id {
+                // We're tracking a specific submission
+                if submission.id != tid {
+                    continue;
                 }
-                submission_map.insert(submission.id.clone(), submission);
+                clear(last_len);
+                let (color, outcome) = submission.result();
+                let _ = execute!(stdout, SetForegroundColor(color));
+                print!("{}", outcome);
+                let _ = execute!(stdout, ResetColor);
+                if submission.is_final_result() {
+                    println!();
+                    break 'outer;
+                } else {
+                    last_len = outcome.len();
+                }
+            } else if !known_ids.contains(&submission.id) {
+                // New submission appeared — start tracking it
+                tracking_id = Some(submission.id);
+                submission.print_header();
+                let (color, outcome) = submission.result();
+                let _ = execute!(stdout, SetForegroundColor(color));
+                print!("{}", outcome);
+                let _ = execute!(stdout, ResetColor);
+                if submission.is_final_result() {
+                    println!();
+                    break 'outer;
+                } else {
+                    last_len = outcome.len();
+                }
             }
         }
         first = false;
