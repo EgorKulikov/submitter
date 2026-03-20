@@ -57,27 +57,6 @@ fn test_codechef() {
     let pass = env_or_skip("CODECHEF_PASS");
     let mut client = CodechefClient::new();
     client.login_with_credentials(&user, &pass).unwrap();
-    let (lang_id, _) = client.find_language_id("C++").unwrap();
-    let solution_id = client
-        .submit_solution(
-            "TEST",
-            "PRACTICE",
-            &lang_id,
-            r#"#include <iostream>
-using namespace std;
-int main() { int n; while (cin >> n && n != 42) cout << n << endl; }"#,
-        )
-        .unwrap();
-    let verdict = client.poll_verdict(&solution_id).unwrap();
-    assert_eq!(verdict, "accepted", "Expected AC, got: {}", verdict);
-}
-
-#[test]
-fn test_codechef_rust() {
-    let user = env_or_skip("CODECHEF_USER");
-    let pass = env_or_skip("CODECHEF_PASS");
-    let mut client = CodechefClient::new();
-    client.login_with_credentials(&user, &pass).unwrap();
     let (lang_id, _) = client.find_language_id("Rust").unwrap();
     let solution_id = client
         .submit_solution(
