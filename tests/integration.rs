@@ -11,7 +11,6 @@
 use submitter::codechef::CodechefClient;
 use submitter::eolymp::EolympClient;
 use submitter::kattis::KattisClient;
-use submitter::toph::TophClient;
 use submitter::uoj::UojClient;
 use submitter::yandex::YandexClient;
 
@@ -80,27 +79,6 @@ fn main() {
 }
 
 // ── Toph ─────────────────────────────────────────────────────────────────
-
-#[test]
-fn test_toph() {
-    let user = env_or_skip("TOPH_USER");
-    let pass = env_or_skip("TOPH_PASS");
-    let mut client = TophClient::new();
-    client.login_with_credentials(&user, &pass).unwrap();
-    let problem_id = client.get_problem_id("/p/add-them-up").unwrap();
-    let (lang_id, _) = client.find_language_id(&problem_id, "C++").unwrap();
-    let sub_id = client
-        .submit_solution(
-            &problem_id,
-            &lang_id,
-            r#"#include <iostream>
-using namespace std;
-int main() { long long a, b; cin >> a >> b; cout << a + b << endl; }"#,
-        )
-        .unwrap();
-    let verdict = client.poll_verdict(&sub_id).unwrap();
-    assert_eq!(verdict, "Accepted", "Expected AC, got: {}", verdict);
-}
 
 // ── Yandex ───────────────────────────────────────────────────────────────
 

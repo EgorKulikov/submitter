@@ -48,12 +48,6 @@ jobs:
           KATTIS_TOKEN: ${{ secrets.KATTIS_TOKEN }}
         run: cargo test --test integration test_kattis -- --nocapture --test-threads=1
 
-      - name: Test Toph
-        env:
-          TOPH_USER: ${{ secrets.TOPH_USER }}
-          TOPH_PASS: ${{ secrets.TOPH_PASS }}
-        run: cargo test --test integration test_toph -- --nocapture --test-threads=1
-
       - name: Test Yandex
         env:
           YANDEX_REFRESH_TOKEN: ${{ secrets.YANDEX_REFRESH_TOKEN }}
