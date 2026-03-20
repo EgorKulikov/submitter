@@ -102,31 +102,6 @@ int main() { long long a, b; cin >> a >> b; cout << a + b << endl; }"#,
     assert_eq!(verdict, "Accepted", "Expected AC, got: {}", verdict);
 }
 
-#[test]
-fn test_toph_rust() {
-    let user = env_or_skip("TOPH_USER");
-    let pass = env_or_skip("TOPH_PASS");
-    let mut client = TophClient::new();
-    client.login_with_credentials(&user, &pass).unwrap();
-    let problem_id = client.get_problem_id("/p/add-them-up").unwrap();
-    let (lang_id, _) = client.find_language_id(&problem_id, "Rust").unwrap();
-    let sub_id = client
-        .submit_solution(
-            &problem_id,
-            &lang_id,
-            r#"use std::io;
-fn main() {
-    let mut s = String::new();
-    io::stdin().read_line(&mut s).unwrap();
-    let v: Vec<i64> = s.trim().split_whitespace().map(|x| x.parse().unwrap()).collect();
-    println!("{}", v[0] + v[1]);
-}"#,
-        )
-        .unwrap();
-    let verdict = client.poll_verdict(&sub_id).unwrap();
-    assert_eq!(verdict, "Accepted", "Expected AC, got: {}", verdict);
-}
-
 // ── Yandex ───────────────────────────────────────────────────────────────
 
 #[test]

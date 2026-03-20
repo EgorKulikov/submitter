@@ -34,32 +34,32 @@ jobs:
         env:
           UOJ_USER: ${{ secrets.UOJ_USER }}
           UOJ_PASS: ${{ secrets.UOJ_PASS }}
-        run: cargo test --test integration test_uoj -- --nocapture
+        run: cargo test --test integration test_uoj -- --nocapture --test-threads=1
 
       - name: Test CodeChef
         env:
           CODECHEF_USER: ${{ secrets.CODECHEF_USER }}
           CODECHEF_PASS: ${{ secrets.CODECHEF_PASS }}
-        run: cargo test --test integration test_codechef -- --nocapture
+        run: cargo test --test integration test_codechef -- --nocapture --test-threads=1
 
       - name: Test Kattis
         env:
           KATTIS_USER: ${{ secrets.KATTIS_USER }}
           KATTIS_TOKEN: ${{ secrets.KATTIS_TOKEN }}
-        run: cargo test --test integration test_kattis -- --nocapture
+        run: cargo test --test integration test_kattis -- --nocapture --test-threads=1
 
       - name: Test Toph
         env:
           TOPH_USER: ${{ secrets.TOPH_USER }}
           TOPH_PASS: ${{ secrets.TOPH_PASS }}
-        run: cargo test --test integration test_toph -- --nocapture
+        run: cargo test --test integration test_toph -- --nocapture --test-threads=1
 
       - name: Test Yandex
         env:
           YANDEX_REFRESH_TOKEN: ${{ secrets.YANDEX_REFRESH_TOKEN }}
-        run: cargo test --test integration test_yandex -- --nocapture
+        run: cargo test --test integration test_yandex -- --nocapture --test-threads=1
 
       - name: Test Eolymp
         env:
           EOLYMP_API_KEY: ${{ secrets.EOLYMP_API_KEY }}
-        run: cargo test --test integration test_eolymp -- --nocapture
+        run: cargo test --test integration test_eolymp -- --nocapture --test-threads=1
