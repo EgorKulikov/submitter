@@ -1,7 +1,7 @@
 use regex::Regex;
 use std::env;
 use std::fs::read_to_string;
-use submitter::{codechef, codeforces, eolymp, kattis, toph, ucup, yandex};
+use submitter::{atcoder, codechef, codeforces, eolymp, kattis, toph, ucup, yandex};
 
 fn site_key_from_url(url: &str) -> Option<String> {
     let url_regex = Regex::new(r"https?://(?:www\.)?([^/]+).*").unwrap();
@@ -28,6 +28,7 @@ fn short_name_to_site_key(name: &str) -> Option<String> {
         "yandex" | "ya" => "yandex.ru",
         "toph" => "toph.co",
         "kattis" => "kattis.com",
+        "atcoder" | "ac" => "atcoder.jp",
         "eolymp" | "eol" => "eolymp.com",
         _ => return None,
     };
@@ -53,6 +54,7 @@ fn do_login(site_key: &str) {
         "codechef.com" => codechef::login(),
         "toph.co" => toph::login(),
         "kattis.com" => kattis::login(),
+        "atcoder.jp" => atcoder::login(),
         "eolymp.com" => eolymp::login(),
         _ => eprintln!("Unsupported site: {}", site_key),
     }
@@ -116,6 +118,7 @@ fn main() {
         "codechef.com" => codechef::submit(url.clone(), language.clone(), source),
         "toph.co" => toph::submit(url.clone(), language.clone(), source),
         "kattis.com" => kattis::submit(url.clone(), language.clone(), source, file.clone()),
+        "atcoder.jp" => atcoder::submit(url.clone(), language.clone(), source),
         "eolymp.com" => eolymp::submit(url.clone(), language.clone(), source),
         _ => println!("Unsupported domain: {}", site_key),
     }

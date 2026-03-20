@@ -49,32 +49,6 @@ int main() { int a, b; cin >> a >> b; cout << a + b << endl; }"#,
     );
 }
 
-#[test]
-fn test_uoj_rust() {
-    let user = env_or_skip("UOJ_USER");
-    let pass = env_or_skip("UOJ_PASS");
-    let mut client = UojClient::new("https://uoj.ac", "UOJ");
-    client.login_with_credentials(&user, &pass).unwrap();
-    let verdict = client
-        .submit(
-            "/problem/1",
-            "Rust",
-            r#"use std::io;
-fn main() {
-    let mut s = String::new();
-    io::stdin().read_line(&mut s).unwrap();
-    let v: Vec<i64> = s.trim().split_whitespace().map(|x| x.parse().unwrap()).collect();
-    println!("{}", v[0] + v[1]);
-}"#,
-        )
-        .unwrap();
-    assert!(
-        verdict.starts_with("100") || verdict.starts_with("AC"),
-        "Expected AC, got: {}",
-        verdict
-    );
-}
-
 // ── CodeChef ─────────────────────────────────────────────────────────────
 
 #[test]

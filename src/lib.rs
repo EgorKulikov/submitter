@@ -1,3 +1,4 @@
+pub mod atcoder;
 pub mod codechef;
 pub mod kattis;
 pub mod codeforces;
