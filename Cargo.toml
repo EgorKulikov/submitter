@@ -12,7 +12,7 @@ crossterm = "0.28"
 open = "5.3"
 rand = "0.8.5"
 rs_sha512 = "0.1"
-reqwest = { version = "0.12", features = ["blocking", "multipart", "json", "cookies"] }
+reqwest = { version = "0.12", features = ["blocking", "multipart", "json", "cookies", "gzip", "deflate"] }
 clipboard = "0.5"
 md-5 = "0.10"
 hmac = "0.12"

@@ -30,11 +30,12 @@ jobs:
       - name: Build tests
         run: cargo test --test integration --no-run
 
-      - name: Test UOJ
-        env:
-          UOJ_USER: ${{ secrets.UOJ_USER }}
-          UOJ_PASS: ${{ secrets.UOJ_PASS }}
-        run: cargo test --test integration test_uoj -- --nocapture --test-threads=1
+      # UOJ disabled: site is down
+      # - name: Test UOJ
+      #   env:
+      #     UOJ_USER: ${{ secrets.UOJ_USER }}
+      #     UOJ_PASS: ${{ secrets.UOJ_PASS }}
+      #   run: cargo test --test integration test_uoj -- --nocapture --test-threads=1
 
       - name: Test CodeChef
         env:

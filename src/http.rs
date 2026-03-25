@@ -50,7 +50,7 @@ impl HttpClient {
     pub fn new(base_url: &str) -> Self {
         let client = Client::builder()
             .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(30))
+            .timeout(Duration::from_secs(60))
             .build()
             .unwrap();
         let domain = base_url

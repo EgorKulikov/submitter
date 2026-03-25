@@ -146,6 +146,8 @@ impl UojClient {
         username: &str,
         password: &str,
     ) -> Result<(), String> {
+        // Clear stale cookies to ensure clean login
+        self.http.clear_cookies();
         let doc = self.get_html("/login")?;
         let token =
             Self::extract_token(&doc).ok_or("Could not find CSRF token on login page")?;

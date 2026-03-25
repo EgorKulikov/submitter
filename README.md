@@ -33,21 +33,22 @@ submitter login eolymp
 submitter login yandex
 ```
 
-Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `ucup`, `uoj`, `qoj`, `yandex`, `ya`,
-`toph`, `kattis`, `eolymp`, `eol`. Full URLs also work.
+Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `ucup`, `uoj`, `yandex`, `ya`,
+`toph`, `kattis`, `eolymp`, `eol`, `luogu`, `lg`. Full URLs also work.
 
 ## Supported sites
 
-| Site                                                                            | Submit                                        | Verdict      | Auth                            |
-|---------------------------------------------------------------------------------|-----------------------------------------------|--------------|---------------------------------|
-| [AtCoder](https://atcoder.jp)                                                   | via browser (opens page, copies to clipboard) | HTTP polling | browser cookie (EditThisCookie) |
-| [Codeforces](https://codeforces.com)                                            | via browser (opens page, copies to clipboard) | API polling  | API key + secret                |
-| [CodeChef](https://codechef.com)                                                | API                                           | API          | username + password             |
-| [Yandex Contest](https://contest.yandex.com)                                    | API                                           | API          | OAuth (device code flow)        |
-| [UOJ](https://uoj.ac) / [UCup](https://contest.ucup.ac) / [QOJ](https://qoj.ac) | HTTP                                          | HTTP         | username + password             |
-| [Toph](https://toph.co)                                                         | API                                           | API          | username + password             |
-| [Kattis](https://open.kattis.com)                                               | API                                           | API          | username + token (.kattisrc)    |
-| [Eolymp](https://eolymp.com)                                                    | API                                           | API          | API key                         |
+| Site                                                    | Submit                                        | Verdict      | Auth                            |
+|---------------------------------------------------------|-----------------------------------------------|--------------|---------------------------------|
+| [AtCoder](https://atcoder.jp)                           | via browser (opens page, copies to clipboard) | HTTP polling | browser cookie (EditThisCookie) |
+| [Codeforces](https://codeforces.com)                    | via browser (opens page, copies to clipboard) | API polling  | API key + secret                |
+| [CodeChef](https://codechef.com)                        | API                                           | API          | username + password             |
+| [Yandex Contest](https://contest.yandex.com)            | API                                           | API          | OAuth (device code flow)        |
+| [UOJ](https://uoj.ac) / [UCup](https://contest.ucup.ac) | HTTP                                          | HTTP         | username + password             |
+| [Toph](https://toph.co)                                 | API                                           | API          | username + password             |
+| [Kattis](https://open.kattis.com)                       | API                                           | API          | username + token (.kattisrc)    |
+| [Eolymp](https://eolymp.com)                            | API                                           | API          | API key                         |
+| [Luogu](https://www.luogu.com.cn)                       | via browser (opens page, copies to clipboard) | HTTP polling | browser cookie (EditThisCookie) |
 
 ### Notes
 
@@ -59,6 +60,8 @@ Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `uc
   home directory
 - **Eolymp**: requires API key from https://eolymp.com/developer with scopes: `atlas:problem:read`,
   `atlas:submission:read`, `atlas:submission:write`, `judge:contest:read`, `judge:contest:participate`
+- **Luogu**: on first use, export cookies from browser using [EditThisCookie](https://www.editthiscookie.com/) extension
+  and paste the JSON when prompted
 
 ## Examples
 
@@ -81,9 +84,6 @@ submitter "https://uoj.ac/problem/1" "C++14" solution.cpp
 # UCup
 submitter "https://contest.ucup.ac/contest/1106/problem/A" "C++17" solution.cpp
 
-# QOJ
-submitter "https://qoj.ac/problem/1" "C++14" solution.cpp
-
 # Toph
 submitter "https://toph.co/p/add-them-up" "C++" solution.cpp
 
@@ -95,4 +95,7 @@ submitter "https://eolymp.com/en/problems/1" "C++" solution.cpp
 
 # Eolymp (contest)
 submitter "https://eolymp.com/en/contests/CONTEST_ID/problems/A" "C++" solution.cpp
+
+# Luogu
+submitter "https://www.luogu.com.cn/problem/P1001" "C++" solution.cpp
 ```
