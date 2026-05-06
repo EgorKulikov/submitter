@@ -287,6 +287,7 @@ impl TophClient {
 
         let token = self.token_id.as_ref().ok_or("Not logged in")?.clone();
         loop {
+            clear(last_len);
             let resp = reqwest::blocking::Client::new()
                 .get(format!("https://toph.co/api/submissions/{}", poll_id))
                 .header("Authorization", format!("Token {}", token))
@@ -316,7 +317,6 @@ impl TophClient {
 
             if !verdict.is_empty() && status > 2 {
                 // Done
-                clear(last_len);
                 let is_accepted = verdict == "Accepted";
                 let color = if is_accepted {
                     Color::Green
@@ -357,7 +357,6 @@ impl TophClient {
                 "Running".to_string()
             };
 
-            clear(last_len);
             let _ = execute!(stdout, SetForegroundColor(Color::Yellow));
             print!("{}", progress);
             let _ = execute!(stdout, ResetColor);

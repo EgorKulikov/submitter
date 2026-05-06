@@ -183,6 +183,37 @@ impl HttpClient {
         req
     }
 
+    fn send_with_retry(
+        &self,
+        build_req: impl Fn() -> reqwest::blocking::RequestBuilder,
+        url: &str,
+    ) -> Result<reqwest::blocking::Response, String> {
+        let mut attempt = 0;
+        let mut last_msg_len = 0;
+        loop {
+            attempt += 1;
+            match build_req().send() {
+                Ok(resp) => {
+                    crate::clear(last_msg_len);
+                    return Ok(resp);
+                }
+                Err(e) => {
+                    if e.is_connect() || e.is_timeout() || e.is_request() {
+                        crate::clear(last_msg_len);
+                        let msg = format!("Connection error (attempt {}), retrying...", attempt);
+                        last_msg_len = msg.len();
+                        print!("{}", msg);
+                        let _ = std::io::Write::flush(&mut std::io::stdout());
+                        std::thread::sleep(Duration::from_secs(2));
+                        continue;
+                    }
+                    crate::clear(last_msg_len);
+                    return Err(format!("{} failed: {}", url, e));
+                }
+            }
+        }
+    }
+
     fn follow_redirect(
         &self,
         resp: reqwest::blocking::Response,
@@ -207,12 +238,22 @@ impl HttpClient {
 
     pub fn get(&mut self, path: &str) -> Result<reqwest::blocking::Response, String> {
         let url = self.resolve_url(path);
-        let req = self.client.get(&url);
-        let req = self.apply_cookies(req);
-        let req = self.apply_headers(req);
-        let resp = req
-            .send()
-            .map_err(|e| format!("GET {} failed: {}", url, e))?;
+        let cookie_header = self.cookie_header();
+        let headers = self.extra_headers.clone();
+        let send_cookies = self.send_cookies;
+        let resp = self.send_with_retry(
+            || {
+                let mut req = self.client.get(&url);
+                if send_cookies && !cookie_header.is_empty() {
+                    req = req.header(COOKIE, &cookie_header);
+                }
+                for (name, value) in &headers {
+                    req = req.header(name.clone(), value.clone());
+                }
+                req
+            },
+            &url,
+        )?;
         self.save_response_cookies(&resp);
         self.follow_redirect(resp)
     }
@@ -224,13 +265,24 @@ impl HttpClient {
         header_value: &str,
     ) -> Result<reqwest::blocking::Response, String> {
         let url = self.resolve_url(path);
-        let req = self.client.get(&url);
-        let req = self.apply_cookies(req);
-        let req = self.apply_headers(req);
-        let resp = req
-            .header(header_name, header_value)
-            .send()
-            .map_err(|e| format!("GET {} failed: {}", url, e))?;
+        let cookie_header = self.cookie_header();
+        let headers = self.extra_headers.clone();
+        let send_cookies = self.send_cookies;
+        let extra_name = header_name.to_string();
+        let extra_value = header_value.to_string();
+        let resp = self.send_with_retry(
+            || {
+                let mut req = self.client.get(&url);
+                if send_cookies && !cookie_header.is_empty() {
+                    req = req.header(COOKIE, &cookie_header);
+                }
+                for (name, value) in &headers {
+                    req = req.header(name.clone(), value.clone());
+                }
+                req.header(extra_name.as_str(), extra_value.as_str())
+            },
+            &url,
+        )?;
         self.save_response_cookies(&resp);
         self.follow_redirect(resp)
     }
@@ -260,13 +312,26 @@ impl HttpClient {
         form: &[(&str, &str)],
     ) -> Result<reqwest::blocking::Response, String> {
         let url = self.resolve_url(path);
-        let req = self.client.post(&url);
-        let req = self.apply_cookies(req);
-        let req = self.apply_headers(req);
-        let resp = req
-            .form(form)
-            .send()
-            .map_err(|e| format!("POST {} failed: {}", url, e))?;
+        let cookie_header = self.cookie_header();
+        let headers = self.extra_headers.clone();
+        let send_cookies = self.send_cookies;
+        let form_owned: Vec<(String, String)> =
+            form.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        let resp = self.send_with_retry(
+            || {
+                let mut req = self.client.post(&url);
+                if send_cookies && !cookie_header.is_empty() {
+                    req = req.header(COOKIE, &cookie_header);
+                }
+                for (name, value) in &headers {
+                    req = req.header(name.clone(), value.clone());
+                }
+                let form_ref: Vec<(&str, &str)> =
+                    form_owned.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+                req.form(&form_ref)
+            },
+            &url,
+        )?;
         self.save_response_cookies(&resp);
         self.follow_redirect(resp)
     }
@@ -277,14 +342,24 @@ impl HttpClient {
         json_body: &str,
     ) -> Result<reqwest::blocking::Response, String> {
         let url = self.resolve_url(path);
-        let req = self.client.post(&url);
-        let req = self.apply_cookies(req);
-        let req = self.apply_headers(req);
-        let resp = req
-            .header("Content-Type", "application/json")
-            .body(json_body.to_string())
-            .send()
-            .map_err(|e| format!("POST {} failed: {}", url, e))?;
+        let cookie_header = self.cookie_header();
+        let headers = self.extra_headers.clone();
+        let send_cookies = self.send_cookies;
+        let body = json_body.to_string();
+        let resp = self.send_with_retry(
+            || {
+                let mut req = self.client.post(&url);
+                if send_cookies && !cookie_header.is_empty() {
+                    req = req.header(COOKIE, &cookie_header);
+                }
+                for (name, value) in &headers {
+                    req = req.header(name.clone(), value.clone());
+                }
+                req.header("Content-Type", "application/json")
+                    .body(body.clone())
+            },
+            &url,
+        )?;
         self.save_response_cookies(&resp);
         self.follow_redirect(resp)
     }

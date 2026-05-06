@@ -300,6 +300,8 @@ pub fn submit(task_url: String, source: String) {
     let mut stale_count = 0;
     let mut last_response = String::new();
     'outer: loop {
+        clear(last_len);
+        last_len = 0;
         let api_url = url(
             "user.status".to_string(),
             vec![
@@ -362,7 +364,6 @@ pub fn submit(task_url: String, source: String) {
                 if submission.id != tid {
                     continue;
                 }
-                clear(last_len);
                 let (color, outcome) = submission.result();
                 let _ = execute!(stdout, SetForegroundColor(color));
                 print!("{}", outcome);

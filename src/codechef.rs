@@ -177,6 +177,7 @@ impl CodechefClient {
         loop {
             thread::sleep(Duration::from_secs(3));
 
+            clear(last_len);
             let result =
                 self.http
                     .get_json(&format!("/api/ide/submit?solution_id={}", solution_id))?;
@@ -189,8 +190,6 @@ impl CodechefClient {
             if result_code == "wait" {
                 continue;
             }
-
-            clear(last_len);
 
             let (color, verdict_text) = match result_code {
                 "accepted" => (Color::Green, "Accepted"),

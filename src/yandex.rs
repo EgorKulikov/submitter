@@ -281,6 +281,7 @@ impl YandexClient {
         let mut last_len = 0;
 
         loop {
+            clear(last_len);
             let result = self.http.get_json(&format!(
                 "/contests/{}/submissions/{}",
                 contest_id, run_id
@@ -313,7 +314,6 @@ impl YandexClient {
                 } else {
                     "Pending".to_string()
                 };
-                clear(last_len);
                 let _ = execute!(stdout, SetForegroundColor(Color::Yellow));
                 print!("{}", progress);
                 let _ = execute!(stdout, ResetColor);
@@ -321,8 +321,6 @@ impl YandexClient {
                 thread::sleep(Duration::from_secs(2));
                 continue;
             }
-
-            clear(last_len);
 
             let is_accepted = verdict == "OK" || verdict == "ok" || verdict == "Accepted";
             let is_ce = verdict == "CE"

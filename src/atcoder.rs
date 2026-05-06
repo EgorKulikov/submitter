@@ -110,6 +110,8 @@ impl AtcoderClient {
         let mut tracking_id: Option<String> = None;
 
         loop {
+            clear(last_len);
+            last_len = 0;
             let body = self.get_page(&format!("/contests/{}/submissions/me", contest_id))?;
 
             // Parse submissions table
@@ -169,14 +171,12 @@ impl AtcoderClient {
                         } else {
                             verdict.clone()
                         };
-                        clear(last_len);
                         let _ = execute!(stdout, SetForegroundColor(Color::Yellow));
                         print!("{}", progress);
                         let _ = execute!(stdout, ResetColor);
                         last_len = progress.len();
                     } else {
                         // Final verdict
-                        clear(last_len);
                         let is_accepted = label == "success";
                         let color = if is_accepted {
                             Color::Green

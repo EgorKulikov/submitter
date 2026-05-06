@@ -277,6 +277,7 @@ impl UojClient {
         let mut stdout = std::io::stdout();
         let mut last_len = 0;
         loop {
+            clear(last_len);
             let body = self.http.get_text(&format!(
                 "/submission-status-details?get[]={}",
                 submission_id
@@ -298,7 +299,6 @@ impl UojClient {
                     .unwrap_or("");
 
                 let verdict = extract_verdict_from_html(html);
-                clear(last_len);
 
                 if judged {
                     let final_verdict = self.fetch_submission_verdict(submission_id)?;

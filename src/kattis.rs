@@ -156,6 +156,7 @@ impl KattisClient {
         let mut last_len = 0;
 
         loop {
+            clear(last_len);
             let resp = reqwest::blocking::Client::new()
                 .get(format!(
                     "https://{}/submissions/{}?json",
@@ -193,7 +194,6 @@ impl KattisClient {
                 } else {
                     "Testing".to_string()
                 };
-                clear(last_len);
                 let _ = execute!(stdout, SetForegroundColor(Color::Yellow));
                 print!("{}", progress);
                 let _ = execute!(stdout, ResetColor);
@@ -201,8 +201,6 @@ impl KattisClient {
                 thread::sleep(Duration::from_millis(500));
                 continue;
             }
-
-            clear(last_len);
 
             let (verdict_name, is_accepted) = match status_id {
                 16 => ("Accepted", true),

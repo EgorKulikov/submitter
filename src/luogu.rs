@@ -156,6 +156,8 @@ impl LuoguClient {
         let mut tracking_id: Option<i64> = None;
 
         loop {
+            clear(last_len);
+            last_len = 0;
             let records = self.get_records(pid)?;
 
             for record in &records {
@@ -181,14 +183,12 @@ impl LuoguClient {
                     } else {
                         "Waiting".to_string()
                     };
-                    clear(last_len);
                     let _ = execute!(stdout, SetForegroundColor(Color::Yellow));
                     print!("{}", progress);
                     let _ = execute!(stdout, ResetColor);
                     last_len = progress.len();
                 } else {
                     // Final verdict
-                    clear(last_len);
                     let verdict_name = status_name(status);
                     let is_accepted = status == 12;
                     let color = if is_accepted {

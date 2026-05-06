@@ -197,6 +197,7 @@ impl EolympClient {
         let mut stdout = std::io::stdout();
         let mut last_len = 0;
         loop {
+            clear(last_len);
             let raw = self
                 .http
                 .get_json(&format!("{}/submissions/{}", base_url, submission_id))?;
@@ -219,7 +220,6 @@ impl EolympClient {
                 .unwrap_or(0);
 
             if status_num >= 3 {
-                clear(last_len);
 
                 let verdict = result
                     .get("verdict")
@@ -385,7 +385,6 @@ impl EolympClient {
                 } else {
                     "Pending".to_string()
                 };
-                clear(last_len);
                 let _ = execute!(stdout, SetForegroundColor(Color::Yellow));
                 print!("{}", progress);
                 let _ = execute!(stdout, ResetColor);
