@@ -3,6 +3,7 @@ pub mod codechef;
 pub mod kattis;
 pub mod luogu;
 pub mod codeforces;
+pub mod domjudge;
 pub mod eolymp;
 pub mod http;
 pub mod toph;

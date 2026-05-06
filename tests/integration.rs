@@ -9,6 +9,7 @@
 /// Run all tests (needs all env vars set):
 ///   cargo test --test integration -- --nocapture
 use submitter::codechef::CodechefClient;
+use submitter::domjudge::DomjudgeClient;
 use submitter::eolymp::EolympClient;
 use submitter::kattis::KattisClient;
 use submitter::uoj::UojClient;
@@ -249,4 +250,43 @@ fn main() {
         .unwrap();
     let verdict = client.poll_verdict(&space_url, &submission_id).unwrap();
     assert_eq!(verdict, "ACCEPTED", "Expected AC, got: {}", verdict);
+}
+
+// ── DOMjudge ─────────────────────────────────────────────────────────────
+
+/// Detection-only smoke test against a public DOMjudge instance — no auth
+/// needed. Submission tests require DOMJUDGE_URL/USER/PASS/PROBLEM/LANGUAGE.
+#[test]
+fn test_domjudge_detect() {
+    let mut client = DomjudgeClient::new("https://domjudge.iti.kit.edu/main");
+    assert!(
+        client.is_domjudge(),
+        "expected /api/v4/info to identify a DOMjudge server"
+    );
+}
+
+#[test]
+fn test_domjudge_submit() {
+    let url = env_or_skip("DOMJUDGE_URL");
+    let user = env_or_skip("DOMJUDGE_USER");
+    let pass = env_or_skip("DOMJUDGE_PASS");
+    let problem = env_or_skip("DOMJUDGE_PROBLEM");
+    let language = env_or_skip("DOMJUDGE_LANGUAGE");
+    let source = std::env::var("DOMJUDGE_SOURCE").unwrap_or_else(|_| {
+        r#"#include <iostream>
+using namespace std;
+int main() { int a, b; cin >> a >> b; cout << a + b << endl; }"#
+            .to_string()
+    });
+
+    let mut client = DomjudgeClient::new(&url);
+    assert!(client.is_domjudge(), "{} is not a DOMjudge server", url);
+    client.login_with_credentials(&user, &pass).unwrap();
+    let (cid, pid, _) = client.find_contest_problem(&problem).unwrap();
+    let (lid, _) = client.find_language(&cid, &language).unwrap();
+    let sid = client
+        .submit(&cid, &pid, &lid, &source, "solution.cpp")
+        .unwrap();
+    let verdict = client.poll_verdict(&cid, &sid).unwrap();
+    eprintln!("DOMjudge verdict: {}", verdict);
 }

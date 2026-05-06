@@ -1856,6 +1856,7 @@ dependencies = [
 name = "submitter"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "clipboard",
  "crossterm",
  "dialoguer",

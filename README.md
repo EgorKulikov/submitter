@@ -49,6 +49,7 @@ Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `uc
 | [Kattis](https://open.kattis.com)                       | API                                           | API          | username + token (.kattisrc)    |
 | [Eolymp](https://eolymp.com)                            | API                                           | API          | API key                         |
 | [Luogu](https://www.luogu.com.cn)                       | via browser (opens page, copies to clipboard) | HTTP polling | browser cookie (EditThisCookie) |
+| [DOMjudge](https://www.domjudge.org/) (any instance)    | API                                           | API          | username + password (Basic auth) |
 
 ### Notes
 
@@ -62,6 +63,10 @@ Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `uc
   `atlas:submission:read`, `atlas:submission:write`, `judge:contest:read`, `judge:contest:participate`
 - **Luogu**: on first use, export cookies from browser using [EditThisCookie](https://www.editthiscookie.com/) extension
   and paste the JSON when prompted
+- **DOMjudge**: any URL not matching one of the known judges is probed for `/api/v4/info`; if it identifies as DOMjudge,
+  the tool prompts for username and password (HTTP Basic auth), looks up the problem in the active contests, and
+  submits via the v4 REST API. URLs of the form `<base>/{team,public,jury,domjudge}/{problems,submit}/<id>` are
+  recognized, including installs hosted under a sub-path (e.g. `https://domjudge.iti.kit.edu/main/team/problems/3`).
 
 ## Examples
 
@@ -98,4 +103,8 @@ submitter "https://eolymp.com/en/contests/CONTEST_ID/problems/A" "C++" solution.
 
 # Luogu
 submitter "https://www.luogu.com.cn/problem/P1001" "C++" solution.cpp
+
+# DOMjudge (auto-detected for any unknown URL matching the DOMjudge URL scheme)
+submitter "https://domjudge.iti.kit.edu/main/team/problems/3" "C++" solution.cpp
+submitter login "https://domjudge.iti.kit.edu/main"
 ```

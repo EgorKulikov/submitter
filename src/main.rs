@@ -1,7 +1,7 @@
 use regex::Regex;
 use std::env;
 use std::fs::read_to_string;
-use submitter::{atcoder, codechef, codeforces, eolymp, kattis, luogu, toph, ucup, yandex};
+use submitter::{atcoder, codechef, codeforces, domjudge, eolymp, kattis, luogu, toph, ucup, yandex};
 
 fn site_key_from_url(url: &str) -> Option<String> {
     let url_regex = Regex::new(r"https?://(?:www\.)?([^/]+).*").unwrap();
@@ -43,7 +43,7 @@ fn short_name_to_site_key(name: &str) -> Option<String> {
     Some(key.to_string())
 }
 
-fn do_login(site_key: &str) {
+fn do_login(site_key: &str) -> bool {
     match site_key {
         "codeforces.com" => codeforces::login(),
         "ucup.ac" => ucup::login(),
@@ -60,8 +60,9 @@ fn do_login(site_key: &str) {
         "atcoder.jp" => atcoder::login(),
         "luogu.com.cn" => luogu::login(),
         "eolymp.com" => eolymp::login(),
-        _ => eprintln!("Unsupported site: {}", site_key),
+        _ => return false,
     }
+    true
 }
 
 fn main() {
@@ -71,9 +72,14 @@ fn main() {
         let site = &args[2];
         let key = short_name_to_site_key(site)
             .or_else(|| site_key_from_url(site));
-        match key {
-            Some(key) => do_login(&key),
-            None => eprintln!("Unknown site: {}", site),
+        let handled = key.as_deref().map(do_login).unwrap_or(false);
+        if !handled {
+            if (site.starts_with("http://") || site.starts_with("https://"))
+                && domjudge::try_login(site)
+            {
+                return;
+            }
+            eprintln!("Unknown site: {}", site);
         }
         return;
     }
@@ -120,6 +126,10 @@ fn main() {
         "atcoder.jp" => atcoder::submit(url.clone(), language.clone(), source),
         "luogu.com.cn" => luogu::submit(url.clone(), language.clone(), source),
         "eolymp.com" => eolymp::submit(url.clone(), language.clone(), source),
-        _ => println!("Unsupported domain: {}", site_key),
+        _ => {
+            if !domjudge::try_submit(url, language, &source, file) {
+                println!("Unsupported domain: {}", site_key);
+            }
+        }
     }
 }
