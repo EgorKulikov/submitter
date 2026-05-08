@@ -1,0 +1,88 @@
+# Local DOMjudge stack for testing the submitter against a real server.
+#
+# Pieces:
+#   - mariadb           — DB backing the domserver
+#   - domserver         — official domjudge/domserver image, with init scripts
+#                         mounted to enable printing + Rust at first boot
+#   - judgehost         — custom build of domjudge/judgehost that has rustc
+#                         + cargo installed inside the chroot used for judging
+#
+# Bring up:        docker compose up -d
+# Tear down + wipe: docker compose down -v
+#
+# Web UI:    http://localhost:12345/
+# Default credentials are written to docker/admin-password.txt by the domserver
+# image on first boot (look in the volume `domserver-data`).
+#
+# WSL2 caveat: the judgehost needs working cgroups. Recent WSL2 kernels expose
+# cgroup v2 which DOMjudge 8.2+ supports; if judging fails with cgroup errors
+# you may need to enable systemd in /etc/wsl.conf and `wsl --shutdown`.
+
+services:
+  mariadb:
+    image: docker.io/mariadb:11
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: domjudge
+      MYSQL_USER: domjudge
+      MYSQL_PASSWORD: djpw
+      MYSQL_DATABASE: domjudge
+    command: --max-connections=1000 --max-allowed-packet=512M --innodb_snapshot_isolation=OFF
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "127.0.0.1", "-u", "root", "-pdomjudge"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  domserver:
+    image: docker.io/domjudge/domserver:latest
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mariadb
+      MYSQL_USER: domjudge
+      MYSQL_PASSWORD: djpw
+      MYSQL_ROOT_PASSWORD: domjudge
+      MYSQL_DATABASE: domjudge
+      CONTAINER_TIMEZONE: UTC
+    ports:
+      - "12345:80"
+    volumes:
+      # Init scripts that the official entrypoint copies into /scripts/start.d
+      # on every boot. We use them to enable Rust + configure printing once
+      # the database is up.
+      - ./domserver-init:/scripts/start.ro:ro
+      # The print command. The init script registers /dj-print/print.sh as
+      # DOMjudge's `print_command`; the script is invoked when a team prints.
+      - ./print:/dj-print:ro
+      # Print log lives here. Tail it with `docker compose exec domserver
+      # tail -f /var/log/domjudge/print.log`.
+      - print-log:/var/log/domjudge
+
+  judgehost:
+    build:
+      context: .
+      dockerfile: judgehost.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - domserver
+    privileged: true
+    # Required for judgehost to set up runguard cgroups against the host.
+    cgroup: host
+    hostname: judgehost-0
+    environment:
+      DOMSERVER_BASEURL: http://domserver/
+      JUDGEDAEMON_USERNAME: judgehost
+      JUDGEDAEMON_PASSWORD: judgehost
+      DAEMON_ID: 0
+      CONTAINER_TIMEZONE: UTC
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup
+
+volumes:
+  mariadb-data:
+  print-log:
