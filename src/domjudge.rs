@@ -260,6 +260,19 @@ impl DomjudgeClient {
             .ok_or_else(|| format!("submit response missing id: {}", body))
     }
 
+    fn submission_contest_time(&mut self, cid: &str, submission_id: &str) -> Option<f64> {
+        let path = format!("/api/v4/contests/{}/submissions/{}", cid, submission_id);
+        let json = self.http.get_json(&path).ok()?;
+        let s = json.get("contest_time").and_then(|v| v.as_str())?;
+        parse_duration_secs(s)
+    }
+
+    fn contest_duration(&mut self, cid: &str) -> Option<f64> {
+        let json = self.http.get_json(&format!("/api/v4/contests/{}", cid)).ok()?;
+        let s = json.get("duration").and_then(|v| v.as_str())?;
+        parse_duration_secs(s)
+    }
+
     fn judgement_types_map(&mut self, cid: &str) -> HashMap<String, (String, bool)> {
         let mut map = HashMap::new();
         if let Ok(arr) = self
@@ -297,6 +310,36 @@ impl DomjudgeClient {
         let mut stdout = std::io::stdout();
         let mut last_len = 0;
         let types = self.judgement_types_map(cid);
+
+        // Detect submissions outside the contest window — DOMjudge accepts
+        // these but never produces a judgement_type for them, so polling
+        // would block forever. The web UI displays "Too Late" / "Too Early"
+        // computed the same way: submission contest_time vs contest duration.
+        if let (Some(ct), Some(dur)) =
+            (self.submission_contest_time(cid, submission_id), self.contest_duration(cid))
+        {
+            if ct < 0.0 {
+                let _ = execute!(stdout, SetForegroundColor(Color::Red));
+                println!("Too Early (submitted before contest start)");
+                let _ = execute!(stdout, ResetColor);
+                println!(
+                    "Submission url: {}/team/submissions/{}",
+                    self.base_url, submission_id
+                );
+                return Ok("Too Early".to_string());
+            }
+            if ct > dur {
+                let _ = execute!(stdout, SetForegroundColor(Color::Red));
+                println!("Too Late (submitted after contest end)");
+                let _ = execute!(stdout, ResetColor);
+                println!(
+                    "Submission url: {}/team/submissions/{}",
+                    self.base_url, submission_id
+                );
+                return Ok("Too Late".to_string());
+            }
+        }
+
         loop {
             clear(last_len);
             last_len = 0;
@@ -364,6 +407,23 @@ impl DomjudgeClient {
     }
 }
 
+/// Parse a `H:MM:SS[.fff]` duration string (as produced by DOMjudge for
+/// `contest_time` and `duration`) into seconds. The value may be negative
+/// (e.g. for submissions made before the contest started).
+fn parse_duration_secs(s: &str) -> Option<f64> {
+    let neg = s.starts_with('-');
+    let body = if neg { &s[1..] } else { s };
+    let parts: Vec<&str> = body.split(':').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let h: f64 = parts[0].parse().ok()?;
+    let m: f64 = parts[1].parse().ok()?;
+    let sec: f64 = parts[2].parse().ok()?;
+    let total = h * 3600.0 + m * 60.0 + sec;
+    Some(if neg { -total } else { total })
+}
+
 /// Parse a DOMjudge-shaped URL.
 ///
 /// Recognized forms (the host may include a sub-path for the DOMjudge install):
@@ -382,6 +442,23 @@ pub fn parse_url(url: &str) -> Option<(String, String, String)> {
     .ok()?;
     let caps = re.captures(url)?;
     Some((caps[1].to_string(), caps[3].to_string(), caps[4].to_string()))
+}
+
+/// Parse a short-form `<base>/<letter>` URL where the trailing segment is a
+/// problem label (1-3 alphanumeric chars). Matched problem letters resolve
+/// against the active contest's problem `label` / `short_name` / `id`.
+///
+/// Returns `(base_url, letter)`.
+pub fn parse_short_url(url: &str) -> Option<(String, String)> {
+    let url = url.split('?').next().unwrap_or(url);
+    let url = url.split('#').next().unwrap_or(url);
+    let url = url.trim_end_matches('/');
+    let re = Regex::new(
+        r"^(https?://[^/]+(?:/[^/]+)*)/([A-Za-z0-9]{1,3})$",
+    )
+    .ok()?;
+    let caps = re.captures(url)?;
+    Some((caps[1].to_string(), caps[2].to_string()))
 }
 
 /// Try to perform a DOMjudge login for `url`. The URL may be either a base
@@ -409,16 +486,21 @@ pub fn try_login(url: &str) -> bool {
 /// login/submit are printed and then the function returns `true` as the URL
 /// was consumed.
 pub fn try_submit(url: &str, language: &str, source: &str, filename: &str) -> bool {
-    let (base, kind, id) = match parse_url(url) {
-        Some(x) => x,
-        None => return false,
+    let (base, id) = match parse_url(url) {
+        Some((b, kind, id)) => {
+            if kind == "submissions" {
+                eprintln!(
+                    "URL points at a submission view; pass a problem URL like /team/problems/<id>"
+                );
+                return true;
+            }
+            (b, id)
+        }
+        None => match parse_short_url(url) {
+            Some(x) => x,
+            None => return false,
+        },
     };
-    if kind == "submissions" {
-        eprintln!(
-            "URL points at a submission view; pass a problem URL like /team/problems/<id>"
-        );
-        return true;
-    }
     let mut client = DomjudgeClient::new(&base);
     if !client.is_domjudge() {
         return false;
@@ -476,7 +558,26 @@ pub fn try_submit(url: &str, language: &str, source: &str, filename: &str) -> bo
 
 #[cfg(test)]
 mod tests {
-    use super::parse_url;
+    use super::{parse_duration_secs, parse_url};
+
+    #[test]
+    fn duration_basic() {
+        assert_eq!(parse_duration_secs("5:00:00.000"), Some(5.0 * 3600.0));
+        assert_eq!(parse_duration_secs("0:00:01.500"), Some(1.5));
+        assert_eq!(parse_duration_secs("3810:46:40.118"), Some(3810.0 * 3600.0 + 46.0 * 60.0 + 40.118));
+    }
+
+    #[test]
+    fn duration_negative() {
+        assert_eq!(parse_duration_secs("-15:25:13.038"), Some(-(15.0 * 3600.0 + 25.0 * 60.0 + 13.038)));
+    }
+
+    #[test]
+    fn duration_invalid() {
+        assert_eq!(parse_duration_secs("12:34"), None);
+        assert_eq!(parse_duration_secs("abc"), None);
+    }
+
 
     #[test]
     fn parse_team_problem_no_subpath() {
@@ -528,5 +629,42 @@ mod tests {
     fn parse_unrelated() {
         assert!(parse_url("https://example.com/foo/bar").is_none());
         assert!(parse_url("https://codeforces.com/contest/1/problem/A").is_none());
+    }
+
+    #[test]
+    fn parse_short_basic() {
+        let (base, letter) =
+            super::parse_short_url("https://judge.example.com/A").unwrap();
+        assert_eq!(base, "https://judge.example.com");
+        assert_eq!(letter, "A");
+    }
+
+    #[test]
+    fn parse_short_subpath() {
+        let (base, letter) =
+            super::parse_short_url("https://judge.example.com/main/A").unwrap();
+        assert_eq!(base, "https://judge.example.com/main");
+        assert_eq!(letter, "A");
+    }
+
+    #[test]
+    fn parse_short_two_chars() {
+        let (_, letter) =
+            super::parse_short_url("https://judge.example.com/AB").unwrap();
+        assert_eq!(letter, "AB");
+    }
+
+    #[test]
+    fn parse_short_trailing_slash() {
+        let (_, letter) =
+            super::parse_short_url("https://judge.example.com/A/").unwrap();
+        assert_eq!(letter, "A");
+    }
+
+    #[test]
+    fn parse_short_rejects() {
+        assert!(super::parse_short_url("https://judge.example.com").is_none());
+        assert!(super::parse_short_url("https://judge.example.com/about").is_none());
+        assert!(super::parse_short_url("https://judge.example.com/foo-bar").is_none());
     }
 }

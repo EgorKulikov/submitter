@@ -65,8 +65,11 @@ Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `uc
   and paste the JSON when prompted
 - **DOMjudge**: any URL not matching one of the known judges is probed for `/api/v4/info`; if it identifies as DOMjudge,
   the tool prompts for username and password (HTTP Basic auth), looks up the problem in the active contests, and
-  submits via the v4 REST API. URLs of the form `<base>/{team,public,jury,domjudge}/{problems,submit}/<id>` are
-  recognized, including installs hosted under a sub-path (e.g. `https://domjudge.iti.kit.edu/main/team/problems/3`).
+  submits via the v4 REST API. Two URL forms are recognized, including installs hosted under a sub-path (e.g.
+  `https://domjudge.iti.kit.edu/main/...`):
+  - `<base>/{team,public,jury,domjudge}/{problems,submit}/<id>` — the URL displayed in the team/jury web UI.
+  - `<base>/<letter>` — short form where `<letter>` is the problem label (1-3 alphanumeric chars, e.g. `A`); the
+    label is matched against the first active contest's problem list.
 
 ## Examples
 
@@ -106,5 +109,6 @@ submitter "https://www.luogu.com.cn/problem/P1001" "C++" solution.cpp
 
 # DOMjudge (auto-detected for any unknown URL matching the DOMjudge URL scheme)
 submitter "https://domjudge.iti.kit.edu/main/team/problems/3" "C++" solution.cpp
+submitter "https://domjudge.iti.kit.edu/main/A" "C++" solution.cpp   # short form
 submitter login "https://domjudge.iti.kit.edu/main"
 ```
