@@ -17,6 +17,7 @@ cargo install --git https://github.com/EgorKulikov/submitter
 ```
 submitter <task url> <language> <path to solution>
 submitter login <site>
+submitter print <url> <path to file>     # DOMjudge only
 ```
 
 Credentials are prompted on first use and saved for subsequent runs in `.submitter_cookies.json`.
@@ -111,4 +112,5 @@ submitter "https://www.luogu.com.cn/problem/P1001" "C++" solution.cpp
 submitter "https://domjudge.iti.kit.edu/main/team/problems/3" "C++" solution.cpp
 submitter "https://domjudge.iti.kit.edu/main/A" "C++" solution.cpp   # short form
 submitter login "https://domjudge.iti.kit.edu/main"
+submitter print "https://domjudge.iti.kit.edu/main" solution.cpp     # DOMjudge team print
 ```

@@ -213,6 +213,50 @@ impl DomjudgeClient {
         Err(format!("language '{}' not found", language))
     }
 
+    pub fn print(&mut self, source: &str, filename: &str) -> Result<String, String> {
+        // POST /api/v4/printing/team accepts JSON: { original_name, language?,
+        // file_contents (base64) }. The body is exec'd by the print_command
+        // configured on the server; we just hand it the file and let it run.
+        let auth = self
+            .auth_header
+            .clone()
+            .ok_or_else(|| "not logged in".to_string())?;
+        let body = serde_json::json!({
+            "original_name": filename,
+            "file_contents": STANDARD.encode(source.as_bytes()),
+        })
+        .to_string();
+        let url = format!("{}/api/v4/printing/team", self.base_url);
+        let client = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|e| format!("client build failed: {}", e))?;
+        let resp = client
+            .post(&url)
+            .header("Authorization", &auth)
+            .header("Content-Type", "application/json")
+            .body(body)
+            .send()
+            .map_err(|e| format!("print request failed: {}", e))?;
+        let status = resp.status();
+        let text = resp
+            .text()
+            .map_err(|e| format!("failed to read print response: {}", e))?;
+        if !status.is_success() {
+            return Err(format!("print failed ({}): {}", status, text.trim()));
+        }
+        let json: serde_json::Value = serde_json::from_str(&text)
+            .map_err(|e| format!("invalid print response: {} body: {}", e, text))?;
+        if json.get("success").and_then(|v| v.as_bool()) != Some(true) {
+            return Err(format!("print rejected: {}", text.trim()));
+        }
+        Ok(json
+            .get("output")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string())
+    }
+
     pub fn submit(
         &mut self,
         cid: &str,
@@ -459,6 +503,40 @@ pub fn parse_short_url(url: &str) -> Option<(String, String)> {
     .ok()?;
     let caps = re.captures(url)?;
     Some((caps[1].to_string(), caps[2].to_string()))
+}
+
+/// Try to print `file` (its content is `source`) on the DOMjudge instance
+/// reachable at `url`. The URL may be a bare base URL or any of the deeper
+/// page forms recognized by `parse_url` / `parse_short_url`. Returns true if
+/// the URL identified a DOMjudge server.
+pub fn try_print(url: &str, source: &str, filename: &str) -> bool {
+    let base = parse_url(url)
+        .map(|(b, _, _)| b)
+        .or_else(|| parse_short_url(url).map(|(b, _)| b))
+        .unwrap_or_else(|| url.trim_end_matches('/').to_string());
+    let mut client = DomjudgeClient::new(&base);
+    if !client.is_domjudge() {
+        return false;
+    }
+    println!("Detected DOMjudge at {}", base);
+
+    println!("Logging in");
+    if let Err(e) = client.login() {
+        eprintln!("Login failed: {}", e);
+        return true;
+    }
+
+    let basename = std::path::Path::new(filename)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("source");
+
+    println!("Printing");
+    match client.print(source, basename) {
+        Ok(_) => println!("Print job accepted"),
+        Err(e) => eprintln!("Print failed: {}", e),
+    }
+    true
 }
 
 /// Try to perform a DOMjudge login for `url`. The URL may be either a base

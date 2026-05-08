@@ -84,9 +84,28 @@ fn main() {
         return;
     }
 
+    if args.len() == 4 && args[1] == "print" {
+        let url = &args[2];
+        let file = &args[3];
+        let source = match read_to_string(file) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Failed to read {}: {}", file, e);
+                return;
+            }
+        };
+        if !(url.starts_with("http://") || url.starts_with("https://"))
+            || !domjudge::try_print(url, &source, file)
+        {
+            eprintln!("print is only supported for DOMjudge servers");
+        }
+        return;
+    }
+
     if args.len() != 4 {
         println!("Usage: submitter <url> <language> <file>");
         println!("       submitter login <url>");
+        println!("       submitter print <url> <file>     (DOMjudge only)");
         return;
     }
 
