@@ -49,6 +49,15 @@ impl DomjudgeClient {
     }
 
     pub fn login(&mut self) -> Result<(), String> {
+        // Some DOMjudge installs (notably ICPC contest servers) authenticate by
+        // source IP rather than by Basic auth. Probe by hitting /api/v4/user
+        // with no credentials — a 200 with a populated user object means the
+        // server already considers us logged in.
+        if self.try_no_auth().is_ok() {
+            println!("Authenticated by IP");
+            return Ok(());
+        }
+
         if let (Some(user), Some(pass)) = (
             self.http.get_cookie("domjudge_user"),
             self.http.get_cookie("domjudge_pass"),
@@ -68,6 +77,24 @@ impl DomjudgeClient {
             .unwrap();
 
         self.login_with_credentials(&user, &pass)
+    }
+
+    fn try_no_auth(&mut self) -> Result<(), String> {
+        self.auth_header = None;
+        let resp = self.http.get("/api/v4/user")?;
+        let status = resp.status();
+        let body = resp
+            .text()
+            .map_err(|e| format!("read /api/v4/user failed: {}", e))?;
+        if !status.is_success() {
+            return Err(format!("anon /api/v4/user: {}", status));
+        }
+        let json: serde_json::Value = serde_json::from_str(&body)
+            .map_err(|e| format!("invalid /api/v4/user response: {}", e))?;
+        if json.get("id").is_none() && json.get("username").is_none() {
+            return Err("/api/v4/user did not return a user".to_string());
+        }
+        Ok(())
     }
 
     pub fn login_with_credentials(&mut self, user: &str, pass: &str) -> Result<(), String> {
@@ -217,10 +244,6 @@ impl DomjudgeClient {
         // POST /api/v4/printing/team accepts JSON: { original_name, language?,
         // file_contents (base64) }. The body is exec'd by the print_command
         // configured on the server; we just hand it the file and let it run.
-        let auth = self
-            .auth_header
-            .clone()
-            .ok_or_else(|| "not logged in".to_string())?;
         let body = serde_json::json!({
             "original_name": filename,
             "file_contents": STANDARD.encode(source.as_bytes()),
@@ -231,11 +254,18 @@ impl DomjudgeClient {
             .timeout(Duration::from_secs(30))
             .build()
             .map_err(|e| format!("client build failed: {}", e))?;
-        let resp = client
+        let mut req = client
             .post(&url)
-            .header("Authorization", &auth)
             .header("Content-Type", "application/json")
-            .body(body)
+            .body(body);
+        if let Some(auth) = &self.auth_header {
+            req = req.header("Authorization", auth);
+        }
+        let cookies = self.http.cookie_header();
+        if !cookies.is_empty() {
+            req = req.header("Cookie", &cookies);
+        }
+        let resp = req
             .send()
             .map_err(|e| format!("print request failed: {}", e))?;
         let status = resp.status();
@@ -265,10 +295,6 @@ impl DomjudgeClient {
         source: &str,
         filename: &str,
     ) -> Result<String, String> {
-        let auth = self
-            .auth_header
-            .clone()
-            .ok_or_else(|| "not logged in".to_string())?;
         let part = multipart::Part::text(source.to_string())
             .file_name(filename.to_string())
             .mime_str("application/octet-stream")
@@ -283,9 +309,15 @@ impl DomjudgeClient {
             .timeout(Duration::from_secs(60))
             .build()
             .map_err(|e| format!("client build failed: {}", e))?;
-        let resp = client
-            .post(&url)
-            .header("Authorization", &auth)
+        let mut req = client.post(&url);
+        if let Some(auth) = &self.auth_header {
+            req = req.header("Authorization", auth);
+        }
+        let cookies = self.http.cookie_header();
+        if !cookies.is_empty() {
+            req = req.header("Cookie", &cookies);
+        }
+        let resp = req
             .multipart(form)
             .send()
             .map_err(|e| format!("submit request failed: {}", e))?;
