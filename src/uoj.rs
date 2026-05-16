@@ -249,28 +249,10 @@ impl UojClient {
             return Ok(display_score);
         }
 
-        // Not accepted — find the first failing test from the raw HTML
-        let mut first_fail_test = None;
-        let mut first_fail_verdict = None;
-        let re = regex::Regex::new(
-            r"Test #(\d+):[^<]*</h4>.*?col-sm-2[^>]*>score: -?\d+</div>.*?col-sm-2[^>]*>([^<]+)</div>",
-        )
-        .unwrap();
-        for cap in re.captures_iter(&body) {
-            let test_num = &cap[1];
-            let verdict = cap[2].trim();
-            if verdict != "Accepted" {
-                first_fail_test = Some(test_num.to_string());
-                first_fail_verdict = Some(verdict.to_string());
-                break;
-            }
-        }
-
-        let mut result = display_score;
-        if let (Some(test), Some(verdict)) = (first_fail_test, first_fail_verdict) {
-            result.push_str(&format!(" (test #{}: {})", test, verdict));
-        }
-        Ok(result)
+        Ok(match find_first_failing_test(&doc) {
+            Some((verdict, test)) => format!("{} test #{}", verdict, test),
+            None => display_score,
+        })
     }
 
     fn poll_verdict(&mut self, submission_id: &str) -> Result<String, String> {
@@ -353,6 +335,71 @@ fn find_submission_id_in_html(body: &str) -> Option<String> {
     None
 }
 
+/// Find the first failing test on a UOJ submission page and return
+/// `(verdict, test_number)`. UOJ wraps each test in a card whose
+/// class indicates the outcome (`card-uoj-accepted`, `card-uoj-tle`,
+/// `card-uoj-wrong-answer`, …); inside the card-header row the verdict
+/// text sits in its own `<div class="col-sm-2">`:
+///
+/// ```html
+/// <div class="card card-uoj-tle">
+///   <div class="card-header"><div class="row">
+///     <div class="col-sm-2"><h4>Test #2: </h4></div>
+///     <div class="col-sm-2">score: -100</div>
+///     <div class="col-sm-2">Time Limit Exceeded</div>
+///     ...
+/// ```
+fn find_first_failing_test(doc: &Html) -> Option<(String, String)> {
+    let card_sel = Selector::parse(".card").ok()?;
+    let h4_sel = Selector::parse("h4").ok()?;
+    let col_sel = Selector::parse(".card-header .col-sm-2").ok()?;
+    let test_num_re = regex::Regex::new(r"Test\s*#(\d+)").ok()?;
+    for card in doc.select(&card_sel) {
+        let classes = card.value().attr("class").unwrap_or("");
+        let is_test_card = classes.split_whitespace().any(|c| c.starts_with("card-uoj-"));
+        if !is_test_card {
+            continue;
+        }
+        let is_accepted = classes
+            .split_whitespace()
+            .any(|c| c == "card-uoj-accepted");
+        if is_accepted {
+            continue;
+        }
+        let h4 = card.select(&h4_sel).next()?;
+        let heading = h4.text().collect::<String>();
+        let test_num = test_num_re.captures(&heading)?.get(1)?.as_str().to_string();
+        // Verdict cell: a .col-sm-2 that holds neither the heading nor
+        // the "score: ..." cell.
+        let raw_verdict = card
+            .select(&col_sel)
+            .find(|el| {
+                if el.select(&h4_sel).next().is_some() {
+                    return false;
+                }
+                let text = el.text().collect::<String>();
+                let trimmed = text.trim();
+                !trimmed.is_empty() && !trimmed.to_lowercase().starts_with("score")
+            })
+            .map(|el| el.text().collect::<String>().trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| {
+                classes
+                    .split_whitespace()
+                    .find_map(|c| c.strip_prefix("card-uoj-"))
+                    .unwrap_or("Failed")
+                    .replace('-', " ")
+            });
+        // Strip checker detail like "Wrong Answer : read 5 but expected 3".
+        let verdict = raw_verdict
+            .split_once(':')
+            .map(|(head, _)| head.trim().to_string())
+            .unwrap_or(raw_verdict);
+        return Some((verdict, test_num));
+    }
+    None
+}
+
 fn extract_verdict_from_html(html: &str) -> String {
     let doc = Html::parse_fragment(html);
     let score_sel = Selector::parse(".uoj-score").ok();
@@ -372,4 +419,89 @@ fn extract_verdict_from_html(html: &str) -> String {
         .collect::<String>()
         .trim()
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn card(class: &str, num: u32, score: i32, verdict: &str) -> String {
+        format!(
+            r#"<div class="card {cls} mb-3"><div class="card-header"><div class="row">
+                <div class="col-sm-2"><h4 class="card-title">Test #{n}: </h4></div>
+                <div class="col-sm-2">score: {s}</div>
+                <div class="col-sm-2">{v}</div>
+                <div class="col-sm-3">time: 0ms</div>
+                <div class="col-sm-3">memory: 2364kb</div>
+            </div></div></div>"#,
+            cls = class,
+            n = num,
+            s = score,
+            v = verdict,
+        )
+    }
+
+    #[test]
+    fn skips_accepted_cards_and_reports_first_failing_card() {
+        let html = format!(
+            "<html><body>{}{}{}</body></html>",
+            card("card-uoj-accepted", 1, 100, "Accepted"),
+            card("card-uoj-tle", 2, -100, "Time Limit Exceeded"),
+            card("card-uoj-wrong-answer", 3, -100, "Wrong Answer"),
+        );
+        let doc = Html::parse_document(&html);
+        assert_eq!(
+            find_first_failing_test(&doc),
+            Some(("Time Limit Exceeded".to_string(), "2".to_string()))
+        );
+    }
+
+    #[test]
+    fn returns_none_when_all_cards_accepted() {
+        let html = format!(
+            "<html><body>{}{}</body></html>",
+            card("card-uoj-accepted", 1, 100, "Accepted"),
+            card("card-uoj-accepted", 2, 100, "Accepted"),
+        );
+        let doc = Html::parse_document(&html);
+        assert_eq!(find_first_failing_test(&doc), None);
+    }
+
+    #[test]
+    fn ignores_non_test_cards() {
+        let mut html = String::from(
+            r#"<div class="card border-info"><div class="card-header"><h4>Judging History</h4></div></div>"#,
+        );
+        html.push_str(&card("card-uoj-wrong-answer", 3, -100, "Wrong Answer"));
+        let doc = Html::parse_document(&html);
+        assert_eq!(
+            find_first_failing_test(&doc),
+            Some(("Wrong Answer".to_string(), "3".to_string()))
+        );
+    }
+
+    #[test]
+    fn strips_checker_detail_after_colon() {
+        let html = card(
+            "card-uoj-wrong-answer",
+            4,
+            -100,
+            "Wrong Answer : read 5 but expected 3",
+        );
+        let doc = Html::parse_document(&html);
+        assert_eq!(
+            find_first_failing_test(&doc),
+            Some(("Wrong Answer".to_string(), "4".to_string()))
+        );
+    }
+
+    #[test]
+    fn falls_back_to_card_class_when_verdict_cell_empty() {
+        let html = card("card-uoj-tle", 8, -100, "");
+        let doc = Html::parse_document(&html);
+        assert_eq!(
+            find_first_failing_test(&doc),
+            Some(("tle".to_string(), "8".to_string()))
+        );
+    }
 }
