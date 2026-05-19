@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 0.2.0) — release will be tagged v<version>'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.kind }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kind: deb
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - kind: exe
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - kind: dmg
+            os: macos-latest
+            target: aarch64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bump Cargo.toml version
+        shell: bash
+        run: |
+          version='${{ inputs.version }}'
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            sed -i '' "s/^version = \".*\"/version = \"$version\"/" Cargo.toml
+          else
+            sed -i "s/^version = \".*\"/version = \"$version\"/" Cargo.toml
+          fi
+          head -5 Cargo.toml
+
+      - name: Install Linux build deps
+        if: matrix.kind == 'deb'
+        run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libssl-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # ── Linux .deb ────────────────────────────────────────────────
+      - name: Install cargo-deb
+        if: matrix.kind == 'deb'
+        run: cargo install cargo-deb --locked
+      - name: Build .deb
+        if: matrix.kind == 'deb'
+        shell: bash
+        run: |
+          cargo deb --target ${{ matrix.target }}
+          mkdir -p dist
+          cp target/${{ matrix.target }}/debian/*.deb dist/
+
+      # ── Windows .exe ──────────────────────────────────────────────
+      - name: Build .exe
+        if: matrix.kind == 'exe'
+        shell: bash
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/submitter.exe" \
+             "dist/submitter-${{ inputs.version }}-x86_64-windows.exe"
+
+      # ── macOS .dmg ────────────────────────────────────────────────
+      - name: Build .dmg
+        if: matrix.kind == 'dmg'
+        shell: bash
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+          mkdir -p dmg-staging
+          cp "target/${{ matrix.target }}/release/submitter" dmg-staging/submitter
+          mkdir -p dist
+          hdiutil create -volname "submitter" \
+            -srcfolder dmg-staging -ov -format UDZO \
+            "dist/submitter-${{ inputs.version }}-aarch64-macos.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.kind }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la dist/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          generate_release_notes: true
+          files: dist/*

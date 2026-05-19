@@ -2,6 +2,15 @@
 name = "submitter"
 version = "0.1.0"
 edition = "2021"
+description = "Submit solutions to online judges from the command line"
+license = "MIT"
+repository = "https://github.com/EgorKulikov/submitter"
+
+[package.metadata.deb]
+maintainer = "Egor Kulikov <egor@egork.net>"
+section = "utils"
+priority = "optional"
+extended-description = "Submit solutions to AtCoder, Codeforces, CodeChef, Yandex Contest, UOJ, UCup, Toph, Kattis, Eolymp, Luogu, CodeRun, KEP.uz directly from the command line."
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
