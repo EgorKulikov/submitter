@@ -2,6 +2,7 @@ pub mod atcoder;
 pub mod codechef;
 pub mod coderun;
 pub mod kattis;
+pub mod kep;
 pub mod luogu;
 pub mod codeforces;
 pub mod eolymp;

@@ -34,7 +34,7 @@ submitter login yandex
 ```
 
 Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `ucup`, `uoj`, `yandex`, `ya`,
-`toph`, `kattis`, `eolymp`, `eol`, `luogu`, `lg`, `coderun`, `cr`. Full URLs also work.
+`toph`, `kattis`, `eolymp`, `eol`, `luogu`, `lg`, `coderun`, `cr`, `kep`, `kepuz`. Full URLs also work.
 
 ## Supported sites
 
@@ -50,6 +50,7 @@ Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `uc
 | [Eolymp](https://eolymp.com)                            | API                                           | API          | API key                         |
 | [Luogu](https://www.luogu.com.cn)                       | via browser (opens page, copies to clipboard) | HTTP polling | browser cookie (EditThisCookie) |
 | [CodeRun](https://coderun.yandex.ru)                    | API                                           | API          | browser cookie (EditThisCookie) |
+| [KEP.uz](https://kep.uz)                                | API                                           | API          | browser cookie (EditThisCookie) |
 
 ### Notes
 
@@ -64,6 +65,8 @@ Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `uc
 - **Luogu**: on first use, export cookies from browser using [EditThisCookie](https://www.editthiscookie.com/) extension
   and paste the JSON when prompted
 - **CodeRun**: on first use, export cookies from any logged-in yandex.ru tab using
+  [EditThisCookie](https://www.editthiscookie.com/) extension and paste the JSON when prompted
+- **KEP.uz**: on first use, export cookies from a logged-in kep.uz tab using
   [EditThisCookie](https://www.editthiscookie.com/) extension and paste the JSON when prompted
 
 ## Examples
@@ -104,4 +107,10 @@ submitter "https://www.luogu.com.cn/problem/P1001" "C++" solution.cpp
 
 # CodeRun
 submitter "https://coderun.yandex.ru/problem/thermal-panels" "Rust" solution.rs
+
+# KEP.uz (archive problem)
+submitter "https://kep.uz/problems/1" "Rust" solution.rs
+
+# KEP.uz (contest problem)
+submitter "https://kep.uz/contests/487/problem/A" "Rust" solution.rs
 ```

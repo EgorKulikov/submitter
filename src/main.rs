@@ -2,7 +2,7 @@ use regex::Regex;
 use std::env;
 use std::fs::read_to_string;
 use submitter::{
-    atcoder, codechef, coderun, codeforces, eolymp, kattis, luogu, toph, ucup, yandex,
+    atcoder, codechef, coderun, codeforces, eolymp, kattis, kep, luogu, toph, ucup, yandex,
 };
 
 fn site_key_from_url(url: &str) -> Option<String> {
@@ -46,6 +46,7 @@ fn short_name_to_site_key(name: &str) -> Option<String> {
         "luogu" | "lg" => "luogu.com.cn",
         "eolymp" | "eol" => "eolymp.com",
         "coderun" | "cr" => "coderun.yandex.ru",
+        "kep" | "kepuz" => "kep.uz",
         _ => return None,
     };
     Some(key.to_string())
@@ -69,6 +70,7 @@ fn do_login(site_key: &str) {
         "luogu.com.cn" => luogu::login(),
         "eolymp.com" => eolymp::login(),
         "coderun.yandex.ru" => coderun::login(),
+        "kep.uz" => kep::login(),
         _ => eprintln!("Unsupported site: {}", site_key),
     }
 }
@@ -130,6 +132,7 @@ fn main() {
         "luogu.com.cn" => luogu::submit(url.clone(), language.clone(), source),
         "eolymp.com" => eolymp::submit(url.clone(), language.clone(), source),
         "coderun.yandex.ru" => coderun::submit(url.clone(), language.clone(), source),
+        "kep.uz" => kep::submit(url.clone(), language.clone(), source),
         _ => println!("Unsupported domain: {}", site_key),
     }
 }
