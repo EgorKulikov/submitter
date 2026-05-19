@@ -2,11 +2,22 @@
 
 Tool to submit solutions to online judges directly from the command line.
 
-## Prerequisites
+## Installation
+
+### Pre-built binaries
+
+Download the latest binary for your platform from the
+[releases page](https://github.com/EgorKulikov/submitter/releases/latest):
+
+- **Linux (Debian/Ubuntu)**: `submitter_<version>_amd64.deb` — install with `sudo dpkg -i submitter_*.deb`
+- **macOS (Apple Silicon)**: `submitter-<version>-aarch64-macos.dmg` — open the disk image and copy
+  `submitter` to a directory on your `PATH` (e.g. `/usr/local/bin`). The binary is unsigned; on
+  first launch, right-click → Open to bypass Gatekeeper.
+- **Windows**: `submitter-<version>-x86_64-windows.exe` — place anywhere on your `PATH`.
+
+### From source
 
 You need [Rust](https://www.rust-lang.org/tools/install).
-
-## Installation
 
 ```
 cargo install --git https://github.com/EgorKulikov/submitter
