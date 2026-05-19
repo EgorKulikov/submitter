@@ -36,6 +36,14 @@ jobs:
         shell: bash
         run: |
           version='${{ inputs.version }}'
+          # Cargo requires SemVer MAJOR.MINOR.PATCH; expand short forms
+          # like "1" or "1.0" so the build accepts them.
+          case "$version" in
+            *.*.*) ;;
+            *.*)   version="${version}.0" ;;
+            *)     version="${version}.0.0" ;;
+          esac
+          echo "Normalized version: $version"
           if [[ "$RUNNER_OS" == "macOS" ]]; then
             sed -i '' "s/^version = \".*\"/version = \"$version\"/" Cargo.toml
           else
