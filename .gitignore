@@ -1,1 +1,8 @@
 /target
+.submitter_cookies.json
+test_creds.txt
+.kattisrc
+kattisrc
+eolymp.key
+submission-create.py
+atlas-submit.py

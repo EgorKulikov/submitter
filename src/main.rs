@@ -1,11 +1,18 @@
 use regex::Regex;
 use std::env;
 use std::fs::read_to_string;
-use submitter::{atcoder, codechef, codeforces, eolymp, kattis, luogu, toph, ucup, yandex};
+use submitter::{
+    atcoder, codechef, coderun, codeforces, eolymp, kattis, luogu, toph, ucup, yandex,
+};
 
 fn site_key_from_url(url: &str) -> Option<String> {
     let url_regex = Regex::new(r"https?://(?:www\.)?([^/]+).*").unwrap();
     let domain = url_regex.captures(url)?[1].to_string();
+    // CodeRun lives on a Yandex subdomain but is a separate site, so keep the
+    // full hostname instead of collapsing to yandex.ru.
+    if domain == "coderun.yandex.ru" {
+        return Some(domain);
+    }
     let domain_parts: Vec<&str> = domain.split('.').collect();
     // Handle multi-suffix TLDs like .com.cn, .co.uk
     let suffix_len = if domain_parts.len() >= 3 {
@@ -38,6 +45,7 @@ fn short_name_to_site_key(name: &str) -> Option<String> {
         "atcoder" | "ac" => "atcoder.jp",
         "luogu" | "lg" => "luogu.com.cn",
         "eolymp" | "eol" => "eolymp.com",
+        "coderun" | "cr" => "coderun.yandex.ru",
         _ => return None,
     };
     Some(key.to_string())
@@ -60,6 +68,7 @@ fn do_login(site_key: &str) {
         "atcoder.jp" => atcoder::login(),
         "luogu.com.cn" => luogu::login(),
         "eolymp.com" => eolymp::login(),
+        "coderun.yandex.ru" => coderun::login(),
         _ => eprintln!("Unsupported site: {}", site_key),
     }
 }
@@ -120,6 +129,7 @@ fn main() {
         "atcoder.jp" => atcoder::submit(url.clone(), language.clone(), source),
         "luogu.com.cn" => luogu::submit(url.clone(), language.clone(), source),
         "eolymp.com" => eolymp::submit(url.clone(), language.clone(), source),
+        "coderun.yandex.ru" => coderun::submit(url.clone(), language.clone(), source),
         _ => println!("Unsupported domain: {}", site_key),
     }
 }

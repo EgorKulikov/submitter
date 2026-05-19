@@ -34,7 +34,7 @@ submitter login yandex
 ```
 
 Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `ucup`, `uoj`, `yandex`, `ya`,
-`toph`, `kattis`, `eolymp`, `eol`, `luogu`, `lg`. Full URLs also work.
+`toph`, `kattis`, `eolymp`, `eol`, `luogu`, `lg`, `coderun`, `cr`. Full URLs also work.
 
 ## Supported sites
 
@@ -49,6 +49,7 @@ Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `uc
 | [Kattis](https://open.kattis.com)                       | API                                           | API          | username + token (.kattisrc)    |
 | [Eolymp](https://eolymp.com)                            | API                                           | API          | API key                         |
 | [Luogu](https://www.luogu.com.cn)                       | via browser (opens page, copies to clipboard) | HTTP polling | browser cookie (EditThisCookie) |
+| [CodeRun](https://coderun.yandex.ru)                    | API                                           | API          | browser cookie (EditThisCookie) |
 
 ### Notes
 
@@ -62,6 +63,8 @@ Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `uc
   `atlas:submission:read`, `atlas:submission:write`, `judge:contest:read`, `judge:contest:participate`
 - **Luogu**: on first use, export cookies from browser using [EditThisCookie](https://www.editthiscookie.com/) extension
   and paste the JSON when prompted
+- **CodeRun**: on first use, export cookies from any logged-in yandex.ru tab using
+  [EditThisCookie](https://www.editthiscookie.com/) extension and paste the JSON when prompted
 
 ## Examples
 
@@ -98,4 +101,7 @@ submitter "https://eolymp.com/en/contests/CONTEST_ID/problems/A" "C++" solution.
 
 # Luogu
 submitter "https://www.luogu.com.cn/problem/P1001" "C++" solution.cpp
+
+# CodeRun
+submitter "https://coderun.yandex.ru/problem/thermal-panels" "Rust" solution.rs
 ```
