@@ -31,29 +31,65 @@ jobs:
         run: cargo test --test integration --no-run
 
       - name: Test UOJ
+        id: test_uoj
+        continue-on-error: true
         env:
           UOJ_USER: ${{ secrets.UOJ_USER }}
           UOJ_PASS: ${{ secrets.UOJ_PASS }}
         run: cargo test --test integration test_uoj -- --nocapture --test-threads=1
 
       - name: Test CodeChef
+        id: test_codechef
+        continue-on-error: true
         env:
           CODECHEF_USER: ${{ secrets.CODECHEF_USER }}
           CODECHEF_PASS: ${{ secrets.CODECHEF_PASS }}
         run: cargo test --test integration test_codechef -- --nocapture --test-threads=1
 
       - name: Test Kattis
+        id: test_kattis
+        continue-on-error: true
         env:
           KATTIS_USER: ${{ secrets.KATTIS_USER }}
           KATTIS_TOKEN: ${{ secrets.KATTIS_TOKEN }}
         run: cargo test --test integration test_kattis -- --nocapture --test-threads=1
 
       - name: Test Yandex
+        id: test_yandex
+        continue-on-error: true
         env:
           YANDEX_REFRESH_TOKEN: ${{ secrets.YANDEX_REFRESH_TOKEN }}
         run: cargo test --test integration test_yandex -- --nocapture --test-threads=1
 
       - name: Test Eolymp
+        id: test_eolymp
+        continue-on-error: true
         env:
           EOLYMP_API_KEY: ${{ secrets.EOLYMP_API_KEY }}
         run: cargo test --test integration test_eolymp -- --nocapture --test-threads=1
+
+      - name: Summary
+        if: always()
+        env:
+          UOJ: ${{ steps.test_uoj.outcome }}
+          CODECHEF: ${{ steps.test_codechef.outcome }}
+          KATTIS: ${{ steps.test_kattis.outcome }}
+          YANDEX: ${{ steps.test_yandex.outcome }}
+          EOLYMP: ${{ steps.test_eolymp.outcome }}
+        run: |
+          icon() { case "$1" in success) echo "✅ pass" ;; failure) echo "❌ fail" ;; skipped) echo "⏭️  skip" ;; *) echo "❓ $1" ;; esac; }
+          {
+            echo "## Daily Integration Test Results"
+            echo
+            echo "| Judge    | Outcome |"
+            echo "|----------|---------|"
+            echo "| UOJ      | $(icon "$UOJ")     |"
+            echo "| CodeChef | $(icon "$CODECHEF") |"
+            echo "| Kattis   | $(icon "$KATTIS")  |"
+            echo "| Yandex   | $(icon "$YANDEX")  |"
+            echo "| Eolymp   | $(icon "$EOLYMP")  |"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          # Fail the job if any test failed, so the run still goes red.
+          for o in "$UOJ" "$CODECHEF" "$KATTIS" "$YANDEX" "$EOLYMP"; do
+            if [ "$o" = "failure" ]; then exit 1; fi
+          done
