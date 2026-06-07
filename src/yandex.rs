@@ -420,7 +420,7 @@ pub fn submit(url: String, language: String, source: String) {
             return;
         }
     };
-    println!("Compiler: {}", compiler_name);
+    println!("Language: {}", compiler_name);
 
     println!("Submitting");
     let run_id = match client.submit(&contest_id, &problem, &compiler_id, &source) {

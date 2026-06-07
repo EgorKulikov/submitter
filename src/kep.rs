@@ -49,10 +49,7 @@ impl KepClient {
     }
 
     fn prompt_for_cookies(&mut self) -> Result<(), String> {
-        println!(
-            "Export your kep.uz cookies using the EditThisCookie extension (on a logged-in \
-             kep.uz tab) and paste the JSON array."
-        );
+        println!("Export your KEP.uz cookies using the EditThisCookie browser extension on a logged-in kep.uz tab");
         println!("Paste the JSON cookies array:");
         let mut input = String::new();
         let mut bracket_count: i32 = 0;
@@ -368,7 +365,7 @@ pub fn submit(url: String, language: String, source: String) {
     let target = match parse_url(&url) {
         Some(t) => t,
         None => {
-            eprintln!("Could not parse kep.uz URL: {}", url);
+            eprintln!("Could not parse URL: {}", url);
             return;
         }
     };

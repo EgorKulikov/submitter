@@ -263,7 +263,7 @@ pub fn submit(task_url: String, source: String) {
     ctx.set_contents(source).unwrap();
     let pos = match task_url.rfind("/problem/") {
         None => {
-            eprintln!("Bad url");
+            eprintln!("Could not parse URL: {}", task_url);
             return;
         }
         Some(pos) => pos,

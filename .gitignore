@@ -6,3 +6,13 @@ kattisrc
 eolymp.key
 submission-create.py
 atlas-submit.py
+
+# IDE / OS noise
+.idea/
+*:Zone.Identifier
+
+# Local debugging artifacts that must never end up in the repo
+*.har
+toph_arena_debug.html
+eolymp.png
+CODEFORCES.md

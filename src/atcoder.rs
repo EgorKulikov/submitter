@@ -55,8 +55,7 @@ impl AtcoderClient {
             return Ok(());
         }
 
-        println!("Export your AtCoder cookies using EditThisCookie browser extension");
-        println!("(click the extension icon, then the export button to copy JSON to clipboard)");
+        println!("Export your AtCoder cookies using the EditThisCookie browser extension on a logged-in atcoder.jp tab");
         println!("Paste the JSON cookies array:");
         let mut input = String::new();
         let mut bracket_count = 0i32;

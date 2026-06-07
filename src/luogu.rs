@@ -60,8 +60,7 @@ impl LuoguClient {
             return Ok(());
         }
 
-        println!("Export your Luogu cookies using EditThisCookie browser extension");
-        println!("(click the extension icon on luogu.com.cn, then export)");
+        println!("Export your Luogu cookies using the EditThisCookie browser extension on a logged-in luogu.com.cn tab");
         println!("Paste the JSON cookies array:");
         let mut input = String::new();
         let mut bracket_count = 0i32;
@@ -369,7 +368,7 @@ pub fn submit(url: String, _language: String, source: String) {
     let pid = match parse_problem_id(&url) {
         Some(p) => p,
         None => {
-            eprintln!("Could not parse problem ID from URL: {}", url);
+            eprintln!("Could not parse URL: {}", url);
             return;
         }
     };

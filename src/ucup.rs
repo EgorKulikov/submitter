@@ -21,7 +21,7 @@ pub fn submit(url: String, language: String, source: String) {
     let path = match url.find("contest.ucup.ac") {
         Some(pos) => &url[pos + "contest.ucup.ac".len()..],
         None => {
-            eprintln!("Bad URL: {}", url);
+            eprintln!("Could not parse URL: {}", url);
             return;
         }
     };

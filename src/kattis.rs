@@ -590,12 +590,12 @@ pub fn submit(url: String, language: String, source: String, filename: String) {
     let problem = match parse_problem_id(&url) {
         Some(p) => p,
         None => {
-            eprintln!("Could not parse problem ID from URL: {}", url);
+            eprintln!("Could not parse URL: {}", url);
             return;
         }
     };
 
-    println!("Submitting to problem '{}'", problem);
+    println!("Submitting");
     let basename = std::path::Path::new(&filename)
         .file_name()
         .and_then(|n| n.to_str())

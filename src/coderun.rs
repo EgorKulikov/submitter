@@ -46,10 +46,7 @@ impl CodeRunClient {
     }
 
     fn prompt_for_cookies(&mut self) -> Result<(), String> {
-        println!(
-            "Export your Yandex cookies (any yandex.ru page in a browser where you're logged \
-             in) using the EditThisCookie extension and paste the JSON array."
-        );
+        println!("Export your Yandex cookies using the EditThisCookie browser extension on a logged-in yandex.ru tab");
         println!("Paste the JSON cookies array:");
         let mut input = String::new();
         let mut bracket_count: i32 = 0;
@@ -201,7 +198,7 @@ impl CodeRunClient {
             .get("title")
             .and_then(|v| v.as_str())
             .unwrap_or(compiler_slug.as_str());
-        println!("Compiler: {}", compiler_title);
+        println!("Language: {}", compiler_title);
 
         let csrf = self.fetch_csrf_token()?;
         self.http.set_header("x-csrf-token", &csrf);
@@ -446,7 +443,7 @@ pub fn submit(url: String, language: String, source: String) {
     let problem_path = match parse_url(&url) {
         Some(p) => p,
         None => {
-            eprintln!("Could not parse CodeRun URL: {}", url);
+            eprintln!("Could not parse URL: {}", url);
             return;
         }
     };
