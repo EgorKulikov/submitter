@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1] - 2026-06-09
+
 ### Added
+- Repovive (`repovive.com`) support: cookie-import login, JSON submit
+  API, polling, language-ID table. Short aliases: `repovive` / `rv`.
+  Browser-mimicking headers added so requests get past Repovive's WAF.
 - README install instructions for the pre-built `.deb` / `.dmg` / `.exe`
   binaries published to GitHub releases.
 
@@ -31,5 +36,6 @@ First stable release.
 - Pre-built `.deb`, `.dmg` (aarch64), and `.exe` binaries published
   via a manual GitHub Actions release workflow.
 
-[Unreleased]: https://github.com/EgorKulikov/submitter/compare/v1.0...HEAD
+[Unreleased]: https://github.com/EgorKulikov/submitter/compare/v1.1...HEAD
+[1.1]: https://github.com/EgorKulikov/submitter/compare/v1.0...v1.1
 [1.0]: https://github.com/EgorKulikov/submitter/releases/tag/v1.0

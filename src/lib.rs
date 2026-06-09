@@ -5,6 +5,7 @@ pub mod kattis;
 pub mod kep;
 pub mod luogu;
 pub mod codeforces;
+pub mod repovive;
 pub mod eolymp;
 pub mod http;
 pub mod toph;

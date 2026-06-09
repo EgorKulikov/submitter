@@ -45,7 +45,8 @@ submitter login yandex
 ```
 
 Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `ucup`, `uoj`, `yandex`, `ya`,
-`toph`, `kattis`, `eolymp`, `eol`, `luogu`, `lg`, `coderun`, `cr`, `kep`, `kepuz`. Full URLs also work.
+`toph`, `kattis`, `eolymp`, `eol`, `luogu`, `lg`, `coderun`, `cr`, `kep`, `kepuz`, `repovive`, `rv`. Full URLs
+also work.
 
 ## Supported sites
 
@@ -62,6 +63,7 @@ Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `uc
 | [Luogu](https://www.luogu.com.cn)                       | via browser (opens page, copies to clipboard) | HTTP polling | browser cookie (EditThisCookie) |
 | [CodeRun](https://coderun.yandex.ru)                    | API                                           | API          | browser cookie (EditThisCookie) |
 | [KEP.uz](https://kep.uz)                                | API                                           | API          | browser cookie (EditThisCookie) |
+| [Repovive](https://repovive.com)                        | API                                           | API          | browser cookie (EditThisCookie) |
 
 ### Notes
 
@@ -78,6 +80,8 @@ Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `uc
 - **CodeRun**: on first use, export cookies from any logged-in yandex.ru tab using
   [EditThisCookie](https://www.editthiscookie.com/) extension and paste the JSON when prompted
 - **KEP.uz**: on first use, export cookies from a logged-in kep.uz tab using
+  [EditThisCookie](https://www.editthiscookie.com/) extension and paste the JSON when prompted
+- **Repovive**: on first use, export cookies from a logged-in repovive.com tab using
   [EditThisCookie](https://www.editthiscookie.com/) extension and paste the JSON when prompted
 
 ## Examples
@@ -124,4 +128,7 @@ submitter "https://kep.uz/problems/1" "Rust" solution.rs
 
 # KEP.uz (contest problem)
 submitter "https://kep.uz/contests/487/problem/A" "Rust" solution.rs
+
+# Repovive
+submitter "https://repovive.com/contests/10/problems/A" "Rust" solution.rs
 ```
