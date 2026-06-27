@@ -10,15 +10,9 @@ if (location.hostname === 'www.luogu.com.cn') {
     if (!editor) throw new Error('Monaco editor not found');
     editor.setValue(job.source);
 
-    const entry = window.__submitterPickLanguage('luogu', job.language);
-    if (entry) {
-      const picked = await pickLanguageOption(entry.name, 10000);
-      if (!picked) {
-        window.notify(`language "${entry.name}" not in dropdown. Pick one and click 提交.`);
-        return;
-      }
-    } else {
-      window.notify(`unknown language "${job.language}". Pick one and click 提交.`);
+    const picked = await pickLanguageOption(job.language, 10000);
+    if (!picked) {
+      window.notify(`couldn't pick a language for "${job.language}". Pick one and click 提交.`);
       return;
     }
 
@@ -33,7 +27,7 @@ if (location.hostname === 'www.luogu.com.cn') {
     return editors.length > 0 ? editors[0] : null;
   }
 
-  async function pickLanguageOption(name, timeoutMs) {
+  async function pickLanguageOption(requested, timeoutMs) {
     const start = Date.now();
     const remaining = () => Math.max(0, timeoutMs - (Date.now() - start));
     const trigger = await waitFor(
@@ -42,10 +36,15 @@ if (location.hostname === 'www.luogu.com.cn') {
     );
     if (!trigger) return false;
     trigger.click();
-    const item = await waitFor(() => Array.from(document.querySelectorAll('.lg-dropdown-menu li, .lg-select-option'))
-      .find(li => li.textContent.trim() === name), remaining());
-    if (!item) return false;
-    item.click();
+    const items = await waitFor(() => {
+      const list = Array.from(document.querySelectorAll('.lg-dropdown-menu li, .lg-select-option'));
+      return list.length > 0 ? list : null;
+    }, remaining());
+    if (!items) return false;
+    const texts = items.map(li => li.textContent.trim());
+    const idx = window.__submitterPickOption('luogu', requested, texts);
+    if (idx === null) return false;
+    items[idx].click();
     return true;
   }
 

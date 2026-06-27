@@ -1,63 +1,102 @@
 'use strict';
-// Per-site language matchers. Each entry: { name, match }
-// - `name` is the exact label the page's <select> uses.
-// - `match` is an array of substrings (case-insensitive) or RegExp objects.
-// `pickLanguage(site, requested)` returns the first entry whose match[] contains
-// a substring/regex that matches `requested`, or null if nothing matches.
-//
-// Real entries land in tasks 6/7/8 — this stub keeps activator.js loadable.
+// Per-site language matchers.
+// Each entry: { when, options }
+//   `when`    – array of substrings (case-insensitive) or RegExp that match the USER's language string.
+//   `options` – substring or RegExp that matches a DROPDOWN OPTION's text.
+// Entries ordered specific-to-general; the picker takes the first `when` match.
 window.__submitterLanguages = {
   atcoder: [
-    { name: "C++ 23 (gcc 12.2)",       match: ["c++23 (gcc", "c++23"] },
-    { name: "C++ 23 (Clang 16.0.6)",   match: ["c++23 (clang"] },
-    { name: "C++ 20 (gcc 12.2)",       match: ["c++20 (gcc", "c++20"] },
-    { name: "C++ 20 (Clang 16.0.6)",   match: ["c++20 (clang"] },
-    { name: "C++ 17 (gcc 12.2)",       match: ["c++17", /^c\+\+$/i, "g++"] },
-    { name: "Python (CPython 3.11.4)", match: [/^python\s*3/i, "cpython", "python"] },
-    { name: "PyPy3 (7.3.12)",          match: [/^pypy/i] },
-    { name: "Rust (1.70.0)",           match: [/^rust/i] },
-    { name: "Java (OpenJDK 17)",       match: [/^java/i] },
-    { name: "C# 11.0 (.NET 7.0.7)",    match: [/^c\#/i, "csharp", ".net"] },
-    { name: "Go (1.20.6)",             match: [/^go$/i, "golang"] },
-    { name: "Kotlin (1.8.20)",         match: [/^kotlin/i] },
+    // Specific C++ standards first
+    { when: [/^c\+\+\s*23\b/i], options: /c\+\+\s*23/i },
+    { when: [/^c\+\+\s*20\b/i], options: /c\+\+\s*20/i },
+    { when: [/^c\+\+\s*17\b/i], options: /c\+\+\s*17/i },
+    { when: [/^c\+\+\s*14\b/i], options: /c\+\+\s*14/i },
+    // Bare "c++" / "g++" → newest C++ available
+    { when: [/^c\+\+$/i, /^g\+\+$/i, "cpp"], options: /^c\+\+/i },
+    // PyPy before Python (otherwise /python/i could match PyPy)
+    { when: [/^pypy/i], options: /pypy/i },
+    // Python 3 only (we never want to silently submit as Python 2)
+    { when: [/^python\s*3/i, /^python$/i, "cpython"], options: /python.*3|^python\s*\(3/i },
+    // Rust editions first, bare rust last
+    { when: [/^rust\s*2024/i, "rust2024"], options: /rust\s*2024/i },
+    { when: [/^rust\s*2021/i, "rust2021"], options: /rust\s*2021/i },
+    { when: [/^rust/i], options: /rust/i },
+    { when: [/^java/i], options: /^java/i },
+    { when: [/^kotlin/i], options: /kotlin/i },
+    { when: [/^go$/i, "golang"], options: /^go\b/i },
+    { when: [/^c\#/i, "csharp", ".net"], options: /c\#|csharp|\.net/i },
   ],
   codeforces: [
-    { name: "GNU G++23 14.2 (64 bit, msys2)",   match: ["c++23"] },
-    { name: "GNU G++20 13.2 (64 bit, winlibs)", match: ["c++20", "c++"] },
-    { name: "GNU G++17 7.3.0",                  match: ["c++17"] },
-    { name: "Python 3.8.10",                    match: [/^python\s*3/i, "cpython"] },
-    { name: "PyPy 3.10 (7.3.15, 64bit)",        match: [/^pypy/i] },
-    { name: "Rust 2021 (1.75.0)",               match: [/^rust/i] },
-    { name: "Java 21 64bit",                    match: [/^java/i] },
-    { name: "C# 10, .NET SDK 6.0",              match: [/^c\#/i, "csharp", ".net"] },
-    { name: "Go 1.22.2",                        match: [/^go$/i, "golang"] },
-    { name: "Kotlin 1.9.21",                    match: [/^kotlin/i] },
+    { when: [/^c\+\+\s*23\b/i], options: /c\+\+23/i },
+    { when: [/^c\+\+\s*20\b/i], options: /c\+\+20/i },
+    { when: [/^c\+\+\s*17\b/i], options: /c\+\+17/i },
+    { when: [/^c\+\+$/i, /^g\+\+$/i, "cpp"], options: /^gnu g\+\+|^c\+\+/i },
+    { when: [/^pypy/i], options: /pypy/i },
+    { when: [/^python\s*3/i, /^python$/i, "cpython"], options: /^python\s*3/i },
+    { when: [/^rust\s*2024/i, "rust2024"], options: /rust\s*2024/i },
+    { when: [/^rust\s*2021/i, "rust2021"], options: /rust\s*2021/i },
+    { when: [/^rust/i], options: /^rust/i },
+    { when: [/^java/i], options: /^java/i },
+    { when: [/^kotlin/i], options: /^kotlin/i },
+    { when: [/^go$/i, "golang"], options: /^go\s/i },
+    { when: [/^c\#/i, "csharp", ".net"], options: /c\#|csharp|\.net/i },
   ],
   luogu: [
-    { name: "C++ 20 (GCC 13)",            match: ["c++20", "c++"] },
-    { name: "C++ 17 (GCC 13)",            match: ["c++17"] },
-    { name: "C++ 14 (GCC 13)",            match: ["c++14"] },
-    { name: "Python 3.11",                match: [/^python\s*3/i, "cpython"] },
-    { name: "PyPy 3 (8.0)",               match: [/^pypy/i] },
-    { name: "Rust (rustc 1.74)",          match: [/^rust/i] },
-    { name: "Java 17 (OpenJDK)",          match: [/^java/i] },
-    { name: "Go 1.22",                    match: [/^go$/i, "golang"] },
-    { name: "Kotlin",                     match: [/^kotlin/i] },
+    { when: [/^c\+\+\s*20\b/i], options: /c\+\+\s*20/i },
+    { when: [/^c\+\+\s*17\b/i], options: /c\+\+\s*17/i },
+    { when: [/^c\+\+\s*14\b/i], options: /c\+\+\s*14/i },
+    { when: [/^c\+\+$/i, /^g\+\+$/i, "cpp"], options: /^c\+\+/i },
+    { when: [/^pypy/i], options: /pypy/i },
+    { when: [/^python\s*3/i, /^python$/i, "cpython"], options: /python.*3/i },
+    { when: [/^rust/i], options: /rust/i },
+    { when: [/^java/i], options: /^java/i },
+    { when: [/^kotlin/i], options: /kotlin/i },
+    { when: [/^go$/i, "golang"], options: /^go\s/i },
   ],
 };
 
-window.__submitterPickLanguage = function pickLanguage(site, requested) {
+window.__submitterPickOption = function pickOption(site, requested, optionTexts) {
   const list = window.__submitterLanguages[site] || [];
   const needle = String(requested || '').trim();
   if (!needle) return null;
-  for (const entry of list) {
-    for (const m of entry.match) {
-      if (m instanceof RegExp) {
-        if (m.test(needle)) return entry;
-      } else {
-        if (needle.toLowerCase().includes(String(m).toLowerCase())) return entry;
-      }
+  const entry = list.find(e => (e.when || []).some(w =>
+    w instanceof RegExp ? w.test(needle) : needle.toLowerCase().includes(String(w).toLowerCase())
+  ));
+  if (!entry) return null;
+  const opt = entry.options;
+  const matches = []; // [{index, text}]
+  for (let i = 0; i < optionTexts.length; i++) {
+    const t = optionTexts[i];
+    const hit = opt instanceof RegExp ? opt.test(t) : t.toLowerCase().includes(String(opt).toLowerCase());
+    if (hit) matches.push({ index: i, text: t });
+  }
+  if (matches.length === 0) return null;
+  if (matches.length === 1) return matches[0].index;
+  // Pick latest by version-tuple comparison; fall back to last document-order if no numbers.
+  const tupleOf = t => {
+    const nums = [];
+    const re = /\d+/g;
+    let m;
+    while ((m = re.exec(t)) !== null) nums.push(parseInt(m[0], 10));
+    return nums;
+  };
+  const cmp = (a, b) => {
+    const n = Math.max(a.length, b.length);
+    for (let i = 0; i < n; i++) {
+      const ai = a[i] !== undefined ? a[i] : 0, bi = b[i] !== undefined ? b[i] : 0;
+      if (ai !== bi) return ai - bi;
+    }
+    return 0;
+  };
+  let best = matches[matches.length - 1]; // default: last in document order
+  let bestTuple = tupleOf(best.text);
+  for (const m of matches) {
+    const t = tupleOf(m.text);
+    if (t.length === 0) continue;
+    if (bestTuple.length === 0 || cmp(t, bestTuple) > 0) {
+      best = m;
+      bestTuple = t;
     }
   }
-  return null;
+  return best.index;
 };

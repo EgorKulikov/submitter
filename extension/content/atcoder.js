@@ -11,19 +11,14 @@ if (location.hostname === 'atcoder.jp') {
 
     editor.setValue(job.source, -1);
 
-    const entry = window.__submitterPickLanguage('atcoder', job.language);
-    if (!entry) {
-      window.notify(`unknown language "${job.language}". Pick one and click Submit.`);
+    const optionTexts = Array.from(select.options).map(o => o.textContent.trim());
+    const idx = window.__submitterPickOption('atcoder', job.language, optionTexts);
+    if (idx === null) {
+      window.notify(`couldn't pick a language for "${job.language}". Pick one and click Submit.`);
       return;
     }
-    const option = Array.from(select.options).find(o => o.textContent.trim() === entry.name);
-    if (!option) {
-      window.notify(`language "${entry.name}" not in dropdown. Pick one and click Submit.`);
-      return;
-    }
-    select.value = option.value;
+    select.value = select.options[idx].value;
     select.dispatchEvent(new Event('change', { bubbles: true }));
-
     submitBtn.click();
   };
 
