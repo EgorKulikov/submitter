@@ -183,7 +183,9 @@ impl AtcoderClient {
                             Color::Red
                         };
                         let mut display = verdict.clone();
-                        if !is_accepted && !score.is_empty() && score != "0" {
+                        if is_accepted && !score.is_empty() {
+                            display.push_str(&format!(" ({})", group_digits(&score)));
+                        } else if !is_accepted && !score.is_empty() && score != "0" {
                             display.push_str(&format!(" ({}pts)", score));
                         }
                         let _ = execute!(stdout, SetForegroundColor(color));
@@ -198,6 +200,22 @@ impl AtcoderClient {
             thread::sleep(Duration::from_secs(2));
         }
     }
+}
+
+fn group_digits(score: &str) -> String {
+    let s = score.trim();
+    if s.is_empty() || !s.chars().all(|c| c.is_ascii_digit()) {
+        return s.to_string();
+    }
+    let chars: Vec<char> = s.chars().collect();
+    let mut result = String::new();
+    for (i, c) in chars.iter().enumerate() {
+        if i > 0 && (chars.len() - i) % 3 == 0 {
+            result.push('\'');
+        }
+        result.push(*c);
+    }
+    result
 }
 
 /// Parse AtCoder URL
@@ -264,5 +282,33 @@ pub fn submit(url: String, _language: String, source: String) {
     // Poll for new submission
     if let Err(e) = client.poll_verdict(&contest_id, &known_ids) {
         eprintln!("Verdict polling failed: {}", e);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::group_digits;
+
+    #[test]
+    fn groups_long_score() {
+        assert_eq!(group_digits("1234567"), "1'234'567");
+    }
+
+    #[test]
+    fn leaves_short_score_alone() {
+        assert_eq!(group_digits("100"), "100");
+        assert_eq!(group_digits("42"), "42");
+    }
+
+    #[test]
+    fn handles_exact_multiple_of_three() {
+        assert_eq!(group_digits("1000"), "1'000");
+        assert_eq!(group_digits("1000000"), "1'000'000");
+    }
+
+    #[test]
+    fn passes_through_non_digit() {
+        assert_eq!(group_digits(""), "");
+        assert_eq!(group_digits("abc"), "abc");
     }
 }

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- AtCoder verdict line now appends the score column for accepted
+  submissions, with digits grouped by apostrophe (e.g.
+  `Accepted (1'234'567)`).
+
 ## [1.1] - 2026-06-09
 
 ### Added
