@@ -143,10 +143,11 @@ impl LuoguClient {
             .ok_or("No record data found".to_string())
     }
 
-    fn poll_verdict(
+    fn poll_verdict<F: FnMut()>(
         &self,
         pid: &str,
         known_ids: &std::collections::HashSet<i64>,
+        mut on_submission_found: F,
     ) -> Result<(), String> {
         let mut stdout = std::io::stdout();
         let mut last_len = 0;
@@ -171,6 +172,7 @@ impl LuoguClient {
                 } else {
                     tracking_id = Some(id);
                     println!("Submission url: https://www.luogu.com.cn/record/{}", id);
+                    on_submission_found();
                 }
 
                 if status == 0 || status == 1 {
@@ -385,14 +387,11 @@ pub fn submit(url: String, language: String, source: String) {
     open::that_detached(&url_to_open).ok();
 
     // Poll for new submission
-    match client.poll_verdict(&pid, &known_ids) {
-        Ok(_) => {
-            if let Some(h) = handoff.as_ref() {
-                h.signal_close();
-            }
+    if let Err(e) = client.poll_verdict(&pid, &known_ids, || {
+        if let Some(h) = handoff.as_ref() {
+            h.signal_close();
         }
-        Err(e) => {
-            eprintln!("Verdict polling failed: {}", e);
-        }
+    }) {
+        eprintln!("Verdict polling failed: {}", e);
     }
 }

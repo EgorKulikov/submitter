@@ -391,6 +391,9 @@ pub fn submit(task_url: String, language: String, source: String) {
                 // New submission appeared — start tracking it
                 tracking_id = Some(submission.id);
                 submission.print_header();
+                if let Some(h) = handoff.as_ref() {
+                    h.signal_close();
+                }
                 let (color, outcome) = submission.result();
                 let _ = execute!(stdout, SetForegroundColor(color));
                 print!("{}", outcome);
@@ -405,9 +408,5 @@ pub fn submit(task_url: String, language: String, source: String) {
         }
         first = false;
         thread::sleep(Duration::from_secs(2));
-    }
-    // Only reached via break 'outer (final verdict received).
-    if let Some(h) = handoff.as_ref() {
-        h.signal_close();
     }
 }

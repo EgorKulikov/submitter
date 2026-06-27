@@ -99,10 +99,11 @@ impl AtcoderClient {
         }
     }
 
-    fn poll_verdict(
+    fn poll_verdict<F: FnMut()>(
         &self,
         contest_id: &str,
         known_ids: &std::collections::HashSet<String>,
+        mut on_submission_found: F,
     ) -> Result<(), String> {
         let mut stdout = std::io::stdout();
         let mut last_len = 0;
@@ -139,6 +140,7 @@ impl AtcoderClient {
                             "Submission url: https://atcoder.jp/contests/{}/submissions/{}",
                             contest_id, sub_id
                         );
+                        on_submission_found();
                     }
 
                     // Parse verdict from this row
@@ -293,15 +295,12 @@ pub fn submit(url: String, language: String, source: String) {
     open::that_detached(&url_to_open).ok();
 
     // Poll for new submission
-    match client.poll_verdict(&contest_id, &known_ids) {
-        Ok(_) => {
-            if let Some(h) = handoff.as_ref() {
-                h.signal_close();
-            }
+    if let Err(e) = client.poll_verdict(&contest_id, &known_ids, || {
+        if let Some(h) = handoff.as_ref() {
+            h.signal_close();
         }
-        Err(e) => {
-            eprintln!("Verdict polling failed: {}", e);
-        }
+    }) {
+        eprintln!("Verdict polling failed: {}", e);
     }
 }
 
