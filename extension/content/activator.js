@@ -9,6 +9,7 @@
     const r = await fetch(`http://127.0.0.1:${port}/job/${token}`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     job = await r.json();
+    try { sessionStorage.removeItem('__submitterHandoff'); } catch (_) {}
   } catch (e) {
     window.notify(`couldn't reach helper (${e.message || 'unknown error'}). Paste from clipboard.`);
     return;

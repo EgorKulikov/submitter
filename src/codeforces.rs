@@ -297,7 +297,7 @@ pub fn submit(task_url: String, language: String, source: String) {
             language,
             source,
         },
-        std::time::Duration::from_secs(30),
+        std::time::Duration::from_secs(60),
     ) {
         Ok(h) => format!("{}#submitter={}:{}", submit_url, h.port, h.token),
         Err(_) => submit_url.clone(),
