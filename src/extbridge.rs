@@ -127,32 +127,63 @@ fn handle(mut stream: TcpStream, store: &Store) -> bool {
     }
 
     let parts: Vec<&str> = request_line.split_whitespace().collect();
-    if parts.len() < 2 || parts[0] != "GET" {
+    if parts.len() < 2 {
         write_404(&mut stream);
         return false;
     }
+    let method = parts[0];
     let path = parts[1];
-    let token = match path.strip_prefix("/job/") {
-        Some(t) => t,
-        None => { write_404(&mut stream); return false; }
-    };
 
-    match store.take(token) {
-        Some(job) => {
-            let body = serde_json::json!({
-                "site": job.site,
-                "url": job.url,
-                "language": job.language,
-                "source": job.source,
-            }).to_string();
-            let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                body.len(), body
-            );
-            let _ = stream.write_all(response.as_bytes());
-            true
+    match method {
+        "OPTIONS" => {
+            // Chrome's Private Network Access preflight: respond with PNA + CORS
+            // headers but do NOT consume the token — the actual GET follows.
+            match path.strip_prefix("/job/") {
+                Some(_) => {
+                    let _ = stream.write_all(
+                        b"HTTP/1.1 204 No Content\r\n\
+                          Access-Control-Allow-Origin: *\r\n\
+                          Access-Control-Allow-Methods: GET\r\n\
+                          Access-Control-Allow-Headers: *\r\n\
+                          Access-Control-Allow-Private-Network: true\r\n\
+                          Access-Control-Max-Age: 60\r\n\
+                          Connection: close\r\n\r\n",
+                    );
+                    false // keep the server thread alive for the real GET
+                }
+                None => { write_404(&mut stream); false }
+            }
         }
-        None => { write_404(&mut stream); false }
+        "GET" => {
+            let token = match path.strip_prefix("/job/") {
+                Some(t) => t,
+                None => { write_404(&mut stream); return false; }
+            };
+
+            match store.take(token) {
+                Some(job) => {
+                    let body = serde_json::json!({
+                        "site": job.site,
+                        "url": job.url,
+                        "language": job.language,
+                        "source": job.source,
+                    }).to_string();
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\n\
+                         Content-Type: application/json\r\n\
+                         Content-Length: {}\r\n\
+                         Access-Control-Allow-Origin: *\r\n\
+                         Access-Control-Allow-Private-Network: true\r\n\
+                         Connection: close\r\n\r\n{}",
+                        body.len(), body
+                    );
+                    let _ = stream.write_all(response.as_bytes());
+                    true
+                }
+                None => { write_404(&mut stream); false }
+            }
+        }
+        _ => { write_404(&mut stream); false }
     }
 }
 
@@ -248,5 +279,55 @@ mod tests {
         assert_eq!(r2.status(), 200);
         let v: serde_json::Value = r2.json().unwrap();
         assert_eq!(v["site"], "atcoder");
+    }
+
+    #[test]
+    fn options_preflight_returns_pna_headers_and_preserves_token() {
+        let job = Job {
+            site: "atcoder",
+            url: "https://atcoder.jp/x".into(),
+            language: "C++".into(),
+            source: "int main(){}".into(),
+        };
+        let handoff = publish(job, Duration::from_secs(5)).unwrap();
+        let url = format!("http://127.0.0.1:{}/job/{}", handoff.port, handoff.token);
+
+        let client = reqwest::blocking::Client::new();
+        let r1 = client.request(reqwest::Method::OPTIONS, &url).send().unwrap();
+        assert_eq!(r1.status(), 204);
+        assert_eq!(
+            r1.headers().get("access-control-allow-private-network").and_then(|v| v.to_str().ok()),
+            Some("true")
+        );
+        assert_eq!(
+            r1.headers().get("access-control-allow-origin").and_then(|v| v.to_str().ok()),
+            Some("*")
+        );
+
+        // Token must still be valid for the actual GET after a preflight.
+        let r2 = reqwest::blocking::get(&url).unwrap();
+        assert_eq!(r2.status(), 200);
+    }
+
+    #[test]
+    fn get_response_carries_pna_headers() {
+        let job = Job {
+            site: "luogu",
+            url: "https://luogu/x".into(),
+            language: "Rust".into(),
+            source: "fn main(){}".into(),
+        };
+        let handoff = publish(job, Duration::from_secs(5)).unwrap();
+        let url = format!("http://127.0.0.1:{}/job/{}", handoff.port, handoff.token);
+        let r = reqwest::blocking::get(&url).unwrap();
+        assert_eq!(r.status(), 200);
+        assert_eq!(
+            r.headers().get("access-control-allow-private-network").and_then(|v| v.to_str().ok()),
+            Some("true")
+        );
+        assert_eq!(
+            r.headers().get("access-control-allow-origin").and_then(|v| v.to_str().ok()),
+            Some("*")
+        );
     }
 }
