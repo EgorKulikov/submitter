@@ -32,7 +32,17 @@ window.__submitterLanguages = {
     { name: "Go 1.22.2",                        match: [/^go$/i, "golang"] },
     { name: "Kotlin 1.9.21",                    match: [/^kotlin/i] },
   ],
-  luogu: [],
+  luogu: [
+    { name: "C++ 20 (GCC 13)",            match: ["c++20", "c++"] },
+    { name: "C++ 17 (GCC 13)",            match: ["c++17"] },
+    { name: "C++ 14 (GCC 13)",            match: ["c++14"] },
+    { name: "Python 3.11",                match: [/^python\s*3/i, "cpython"] },
+    { name: "PyPy 3 (8.0)",               match: [/^pypy/i] },
+    { name: "Rust (rustc 1.74)",          match: [/^rust/i] },
+    { name: "Java 17 (OpenJDK)",          match: [/^java/i] },
+    { name: "Go 1.22",                    match: [/^go$/i, "golang"] },
+    { name: "Kotlin",                     match: [/^kotlin/i] },
+  ],
 };
 
 window.__submitterPickLanguage = function pickLanguage(site, requested) {
