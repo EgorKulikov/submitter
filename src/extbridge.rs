@@ -65,6 +65,104 @@ impl Store {
     }
 }
 
+use std::io::{BufRead, BufReader, Write};
+use std::net::{TcpListener, TcpStream};
+use std::sync::Arc;
+use std::thread;
+
+pub fn publish(job: Job, ttl: Duration) -> Result<Handoff, String> {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .map_err(|e| format!("bind 127.0.0.1:0 failed: {}", e))?;
+    let port = listener.local_addr()
+        .map_err(|e| format!("local_addr failed: {}", e))?.port();
+
+    let store = Arc::new(Store::new());
+    let token = store.insert(job, ttl);
+
+    let store_t = Arc::clone(&store);
+    let deadline = Instant::now() + ttl + Duration::from_secs(1);
+
+    thread::spawn(move || {
+        listener.set_nonblocking(true).ok();
+        loop {
+            if Instant::now() > deadline {
+                return; // TTL+1s: give up so the thread doesn't leak forever.
+            }
+            match listener.accept() {
+                Ok((stream, _)) => {
+                    let served = handle(stream, &store_t);
+                    if served {
+                        return; // Single-shot: served the job, we're done.
+                    }
+                    // 404s don't terminate the thread — a wrong path before the
+                    // real request shouldn't strand the submitter.
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(50));
+                }
+                Err(_) => return,
+            }
+        }
+    });
+
+    Ok(Handoff { port, token })
+}
+
+fn handle(mut stream: TcpStream, store: &Store) -> bool {
+    stream.set_read_timeout(Some(Duration::from_secs(2))).ok();
+    let reader_stream = match stream.try_clone() {
+        Ok(s) => s,
+        Err(_) => { write_404(&mut stream); return false; }
+    };
+    let mut reader = BufReader::new(reader_stream);
+
+    let mut request_line = String::new();
+    if reader.read_line(&mut request_line).is_err() {
+        write_404(&mut stream);
+        return false;
+    }
+    // Drain headers (we don't need them, but the client expects us to read them).
+    let mut header = String::new();
+    loop {
+        header.clear();
+        if reader.read_line(&mut header).is_err() { break; }
+        if header == "\r\n" || header == "\n" || header.is_empty() { break; }
+    }
+
+    let parts: Vec<&str> = request_line.split_whitespace().collect();
+    if parts.len() < 2 || parts[0] != "GET" {
+        write_404(&mut stream);
+        return false;
+    }
+    let path = parts[1];
+    let token = match path.strip_prefix("/job/") {
+        Some(t) => t,
+        None => { write_404(&mut stream); return false; }
+    };
+
+    match store.take(token) {
+        Some(job) => {
+            let body = serde_json::json!({
+                "site": job.site,
+                "url": job.url,
+                "language": job.language,
+                "source": job.source,
+            }).to_string();
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(), body
+            );
+            let _ = stream.write_all(response.as_bytes());
+            true
+        }
+        None => { write_404(&mut stream); false }
+    }
+}
+
+fn write_404(stream: &mut TcpStream) {
+    let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,5 +207,43 @@ mod tests {
     fn store_take_with_unknown_token_returns_none() {
         let store = Store::new();
         assert!(store.take("nonexistent").is_none());
+    }
+
+    #[test]
+    fn publish_serves_job_once_then_404s() {
+        let job = Job {
+            site: "atcoder",
+            url: "https://atcoder.jp/test".into(),
+            language: "C++".into(),
+            source: "int main(){}".into(),
+        };
+        let handoff = publish(job.clone(), Duration::from_secs(5)).unwrap();
+        let url = format!("http://127.0.0.1:{}/job/{}", handoff.port, handoff.token);
+
+        let r1 = reqwest::blocking::get(&url).unwrap();
+        assert_eq!(r1.status(), 200);
+        let v: serde_json::Value = r1.json().unwrap();
+        assert_eq!(v["site"], "atcoder");
+        assert_eq!(v["url"], "https://atcoder.jp/test");
+        assert_eq!(v["language"], "C++");
+        assert_eq!(v["source"], "int main(){}");
+
+        // Second request: 404, server has shut down so this may also fail to connect.
+        let r2 = reqwest::blocking::get(&url);
+        match r2 {
+            Ok(resp) => assert_eq!(resp.status(), 404),
+            Err(_) => {} // Connection refused is also acceptable — server exited.
+        }
+    }
+
+    #[test]
+    fn publish_returns_404_for_wrong_token() {
+        let job = Job {
+            site: "atcoder", url: "x".into(), language: "y".into(), source: "z".into(),
+        };
+        let handoff = publish(job, Duration::from_secs(5)).unwrap();
+        let url = format!("http://127.0.0.1:{}/job/deadbeef", handoff.port);
+        let r = reqwest::blocking::get(&url).unwrap();
+        assert_eq!(r.status(), 404);
     }
 }
