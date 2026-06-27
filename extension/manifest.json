@@ -34,9 +34,21 @@
         "https://codeforces.com/problemset/submit*",
         "https://www.luogu.com.cn/problem/*"
       ],
+      "js": ["content/editor-bridge.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://atcoder.jp/contests/*/submit*",
+        "https://codeforces.com/contest/*/submit*",
+        "https://codeforces.com/problemset/submit*",
+        "https://www.luogu.com.cn/problem/*"
+      ],
       "js": [
         "shared/notify.js",
         "shared/languages.js",
+        "shared/bridge.js",
         "content/atcoder.js",
         "content/codeforces.js",
         "content/luogu.js",

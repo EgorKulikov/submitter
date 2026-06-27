@@ -10,7 +10,6 @@
     history.replaceState(null, '', location.pathname + location.search);
     return;
   }
-  // No fragment on this page — see if a prior page load stashed one.
   try {
     const raw = sessionStorage.getItem(KEY);
     if (!raw) return;

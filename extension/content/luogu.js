@@ -6,9 +6,9 @@ if (location.hostname === 'www.luogu.com.cn') {
       location.hash = 'submit';
     }
 
-    const editor = await waitFor(() => findMonacoEditor(), 15000);
-    if (!editor) throw new Error('Monaco editor not found');
-    editor.setValue(job.source);
+    // Set source via MAIN-world bridge (Monaco lives in page world)
+    const result = await window.__submitterSetSource(job.source, 15000);
+    if (!result.ok) throw new Error(result.error || 'failed to set editor source');
 
     const picked = await pickLanguageOption(job.language, 10000);
     if (!picked) {
@@ -20,12 +20,6 @@ if (location.hostname === 'www.luogu.com.cn') {
     if (!submitBtn) throw new Error('Submit button not found');
     submitBtn.click();
   };
-
-  function findMonacoEditor() {
-    if (typeof monaco === 'undefined' || !monaco.editor) return null;
-    const editors = monaco.editor.getEditors();
-    return editors.length > 0 ? editors[0] : null;
-  }
 
   async function pickLanguageOption(requested, timeoutMs) {
     const start = Date.now();

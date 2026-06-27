@@ -1,25 +1,12 @@
 'use strict';
 if (location.hostname === 'codeforces.com') {
   window.__submitterFill = async function (job) {
-    const textarea = await waitFor(() => document.querySelector('textarea[name="source"]'), 10000);
+    // Set source via MAIN-world bridge (handles textarea + CodeMirror mirror)
+    const result = await window.__submitterSetSource(job.source);
+    if (!result.ok) throw new Error(result.error || 'failed to set editor source');
+
     const select = await waitFor(() => visible(document.querySelectorAll('select[name="programTypeId"]')), 10000);
-    const submitBtn = await waitFor(() => {
-      if (!textarea) return null;
-      const form = textarea.closest('form');
-      return form ? form.querySelector('input[type=submit]') : null;
-    }, 10000);
-
-    if (!textarea) throw new Error('source textarea not found');
     if (!select) throw new Error('language select not found');
-    if (!submitBtn) throw new Error('submit button not found');
-
-    textarea.value = job.source;
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
-    textarea.dispatchEvent(new Event('change', { bubbles: true }));
-
-    // If CodeMirror is enabled, mirror into it so the user sees the code.
-    const cmEl = document.querySelector('.CodeMirror');
-    if (cmEl && cmEl.CodeMirror) cmEl.CodeMirror.setValue(job.source);
 
     const optionTexts = Array.from(select.options).map(o => o.textContent.trim());
     const idx = window.__submitterPickOption('codeforces', job.language, optionTexts);
@@ -29,6 +16,15 @@ if (location.hostname === 'codeforces.com') {
     }
     select.value = select.options[idx].value;
     select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    // Submit: find by form structure (locale-agnostic)
+    const submitBtn = await waitFor(() => {
+      const ta = document.querySelector('textarea[name="source"]');
+      if (!ta) return null;
+      const form = ta.closest('form');
+      return form ? form.querySelector('input[type=submit]') : null;
+    }, 10000);
+    if (!submitBtn) throw new Error('submit button not found');
     submitBtn.click();
   };
 

@@ -1,15 +1,13 @@
 'use strict';
 if (location.hostname === 'atcoder.jp') {
   window.__submitterFill = async function (job) {
-    const editor = await waitFor(() => findEditor(), 10000);
+    // Set source via MAIN-world bridge (ACE editor lives in page world)
+    const result = await window.__submitterSetSource(job.source);
+    if (!result.ok) throw new Error(result.error || 'failed to set editor source');
+
+    // Language select — visible <select name="data.LanguageId">
     const select = await waitFor(() => findLanguageSelect(), 10000);
-    const submitBtn = await waitFor(() => document.querySelector('#submit'), 10000);
-
-    if (!editor) throw new Error('code editor not found');
     if (!select) throw new Error('language select not found');
-    if (!submitBtn) throw new Error('submit button not found');
-
-    editor.setValue(job.source, -1);
 
     const optionTexts = Array.from(select.options).map(o => o.textContent.trim());
     const idx = window.__submitterPickOption('atcoder', job.language, optionTexts);
@@ -19,19 +17,15 @@ if (location.hostname === 'atcoder.jp') {
     }
     select.value = select.options[idx].value;
     select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    // Submit button
+    const submitBtn = await waitFor(() => document.querySelector('#submit'), 10000);
+    if (!submitBtn) throw new Error('submit button not found');
     submitBtn.click();
   };
 
-  function findEditor() {
-    if (typeof ace === 'undefined') return null;
-    const div = Array.from(document.querySelectorAll('div[id^="editor"]'))
-      .find(d => d.offsetParent !== null);
-    if (!div) return null;
-    return ace.edit(div);
-  }
-
   function findLanguageSelect() {
-    return Array.from(document.querySelectorAll('select[id^="select-lang"]'))
+    return Array.from(document.querySelectorAll('select[name="data.LanguageId"]'))
       .find(s => s.offsetParent !== null) || null;
   }
 
