@@ -245,5 +245,11 @@ mod tests {
         let url = format!("http://127.0.0.1:{}/job/deadbeef", handoff.port);
         let r = reqwest::blocking::get(&url).unwrap();
         assert_eq!(r.status(), 404);
+        // After the 404, the server thread must still be alive and serve the correct token.
+        let correct_url = format!("http://127.0.0.1:{}/job/{}", handoff.port, handoff.token);
+        let r2 = reqwest::blocking::get(&correct_url).unwrap();
+        assert_eq!(r2.status(), 200);
+        let v: serde_json::Value = r2.json().unwrap();
+        assert_eq!(v["site"], "atcoder");
     }
 }
