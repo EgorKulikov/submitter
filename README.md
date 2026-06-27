@@ -23,6 +23,20 @@ You need [Rust](https://www.rust-lang.org/tools/install).
 cargo install --git https://github.com/EgorKulikov/submitter
 ```
 
+## Browser extension (optional, AtCoder / Codeforces / Luogu)
+
+The three judges above don't have a usable submit API for normal users,
+so `submitter` opens a browser tab and copies the source to the
+clipboard. The optional [Submitter Helper extension](extension/README.md)
+automates the paste-and-submit step in Chrome and Firefox.
+
+Without the extension, nothing changes — the page opens, you paste, you
+submit. The extension is purely additive.
+
+Download `submitter-extension-<version>.zip` from a
+[release](https://github.com/EgorKulikov/submitter/releases) and follow
+the install instructions in `extension/README.md`.
+
 ## Usage
 
 ```

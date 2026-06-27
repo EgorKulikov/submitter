@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AtCoder verdict line now appends the score column for accepted
   submissions, with digits grouped by apostrophe (e.g.
   `Accepted (1'234'567)`).
+- Optional browser extension (Chrome + Firefox, Manifest V3) that
+  automates paste + language select + click Submit on AtCoder,
+  Codeforces, and Luogu. Submitter opens the submit URL with a one-shot
+  `#submitter=PORT:TOKEN` fragment that the extension uses to fetch the
+  source from a short-lived loopback server. The CLI works unchanged
+  when the extension is absent. Released as
+  `submitter-extension-<version>.zip` alongside the existing binaries.
 
 ## [1.1] - 2026-06-09
 
