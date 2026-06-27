@@ -294,8 +294,8 @@ pub fn submit(task_url: String, language: String, source: String) {
         crate::extbridge::Job {
             site: "codeforces",
             url: submit_url.clone(),
-            language: language.clone(),
-            source: source.clone(),
+            language,
+            source,
         },
         std::time::Duration::from_secs(30),
     ) {

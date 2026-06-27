@@ -1,3 +1,8 @@
+use std::collections::HashMap;
+use std::io::{BufRead, BufReader, Write};
+use std::net::{TcpListener, TcpStream};
+use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
@@ -31,9 +36,6 @@ fn hex_nibble(n: u8) -> char {
     }
 }
 
-use std::collections::HashMap;
-use std::sync::Mutex;
-
 struct Entry {
     job: Job,
     expires_at: Instant,
@@ -64,11 +66,6 @@ impl Store {
         Some(entry.job)
     }
 }
-
-use std::io::{BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
-use std::sync::Arc;
-use std::thread;
 
 pub fn publish(job: Job, ttl: Duration) -> Result<Handoff, String> {
     let listener = TcpListener::bind("127.0.0.1:0")

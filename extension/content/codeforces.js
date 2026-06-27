@@ -1,8 +1,13 @@
+'use strict';
 if (location.hostname === 'codeforces.com') {
   window.__submitterFill = async function (job) {
     const textarea = await waitFor(() => document.querySelector('textarea[name="source"]'), 10000);
     const select = await waitFor(() => visible(document.querySelectorAll('select[name="programTypeId"]')), 10000);
-    const submitBtn = await waitFor(() => document.querySelector('input[type=submit][value="Submit"]'), 10000);
+    const submitBtn = await waitFor(() => {
+      if (!textarea) return null;
+      const form = textarea.closest('form');
+      return form ? form.querySelector('input[type=submit]') : null;
+    }, 10000);
 
     if (!textarea) throw new Error('source textarea not found');
     if (!select) throw new Error('language select not found');

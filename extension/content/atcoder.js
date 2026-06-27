@@ -1,3 +1,4 @@
+'use strict';
 if (location.hostname === 'atcoder.jp') {
   window.__submitterFill = async function (job) {
     const editor = await waitFor(() => findEditor(), 10000);

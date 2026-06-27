@@ -1,3 +1,4 @@
+'use strict';
 // Per-site language matchers. Each entry: { name, match }
 // - `name` is the exact label the page's <select> uses.
 // - `match` is an array of substrings (case-insensitive) or RegExp objects.

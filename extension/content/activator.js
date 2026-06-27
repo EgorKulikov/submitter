@@ -1,13 +1,8 @@
+'use strict';
 (async function () {
-  const re = /(?:^|[#&])submitter=(\d{1,5}):([0-9a-f]{32})(?:&|$)/i;
-  const m = location.hash.match(re);
-  if (!m) return;
-
-  const port = m[1];
-  const token = m[2].toLowerCase();
-
-  // Scrub the fragment before any other script can read it.
-  history.replaceState(null, '', location.pathname + location.search);
+  const handoff = window.__submitterHandoff;
+  if (!handoff) return;
+  const { port, token } = handoff;
 
   let job;
   try {
@@ -15,7 +10,7 @@
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     job = await r.json();
   } catch (e) {
-    window.notify(`couldn't reach helper (${e.message}). Paste from clipboard.`);
+    window.notify(`couldn't reach helper (${e.message || 'unknown error'}). Paste from clipboard.`);
     return;
   }
 
@@ -27,6 +22,6 @@
   try {
     await window.__submitterFill(job);
   } catch (e) {
-    window.notify(`${e.message}. Paste from clipboard.`);
+    window.notify(`${e.message || 'filler error'}. Paste from clipboard.`);
   }
 })();

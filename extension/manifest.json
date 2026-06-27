@@ -24,6 +24,16 @@
         "https://codeforces.com/problemset/submit*",
         "https://www.luogu.com.cn/problem/*"
       ],
+      "js": ["content/scrub.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://atcoder.jp/contests/*/submit*",
+        "https://codeforces.com/contest/*/submit*",
+        "https://codeforces.com/problemset/submit*",
+        "https://www.luogu.com.cn/problem/*"
+      ],
       "js": [
         "shared/notify.js",
         "shared/languages.js",

@@ -1,3 +1,4 @@
+'use strict';
 if (location.hostname === 'www.luogu.com.cn') {
   window.__submitterFill = async function (job) {
     // The activator stripped #submit; restore it so the submit panel opens.
@@ -33,16 +34,16 @@ if (location.hostname === 'www.luogu.com.cn') {
   }
 
   async function pickLanguageOption(name, timeoutMs) {
-    // Click the dropdown trigger to open the menu, then click the matching item.
-    // Luogu's exact selectors should be verified on a live page — adjust as needed.
+    const start = Date.now();
+    const remaining = () => Math.max(0, timeoutMs - (Date.now() - start));
     const trigger = await waitFor(
       () => document.querySelector('.lg-dropdown') || document.querySelector('.lg-select'),
-      timeoutMs
+      remaining()
     );
     if (!trigger) return false;
     trigger.click();
     const item = await waitFor(() => Array.from(document.querySelectorAll('.lg-dropdown-menu li, .lg-select-option'))
-      .find(li => li.textContent.trim() === name), timeoutMs);
+      .find(li => li.textContent.trim() === name), remaining());
     if (!item) return false;
     item.click();
     return true;

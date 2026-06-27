@@ -1,3 +1,4 @@
+'use strict';
 (function () {
   if (window.__submitterNotify) return;
   window.__submitterNotify = function notify(message) {
