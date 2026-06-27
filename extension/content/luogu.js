@@ -1,12 +1,10 @@
 'use strict';
 if (location.hostname === 'www.luogu.com.cn') {
   window.__submitterFill = async function (job) {
-    // The activator stripped #submit; restore it so the submit panel opens.
     if (location.hash !== '#submit') {
       location.hash = 'submit';
     }
 
-    // Set source via MAIN-world bridge (Monaco lives in page world)
     const result = await window.__submitterSetSource(job.source, 15000);
     if (!result.ok) throw new Error(result.error || 'failed to set editor source');
 
@@ -25,13 +23,17 @@ if (location.hostname === 'www.luogu.com.cn') {
     const start = Date.now();
     const remaining = () => Math.max(0, timeoutMs - (Date.now() - start));
     const trigger = await waitFor(
-      () => document.querySelector('.lg-dropdown') || document.querySelector('.lg-select'),
+      () => document.querySelector('.combo-wrapper.lang-select')
+         || document.querySelector('.lang-select')
+         || document.querySelector('.lg-dropdown')
+         || document.querySelector('.lg-select'),
       remaining()
     );
     if (!trigger) return false;
     trigger.click();
     const items = await waitFor(() => {
-      const list = Array.from(document.querySelectorAll('.lg-dropdown-menu li, .lg-select-option'));
+      const list = Array.from(document.querySelectorAll('.dropdown li, .lg-dropdown-menu li, .lg-select-option'))
+        .filter(li => li.offsetParent !== null);
       return list.length > 0 ? list : null;
     }, remaining());
     if (!items) return false;
@@ -44,7 +46,7 @@ if (location.hostname === 'www.luogu.com.cn') {
 
   function findSubmitButton() {
     return Array.from(document.querySelectorAll('button'))
-      .find(b => b.textContent.trim() === '提交' && b.offsetParent !== null) || null;
+      .find(b => /提交/.test(b.textContent.trim()) && b.offsetParent !== null) || null;
   }
 
   function waitFor(fn, timeoutMs) {

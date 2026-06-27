@@ -18,6 +18,26 @@
         catch (e) { return { ok: false, error: 'monaco.setValue failed: ' + e.message }; }
       }
     }
+    // CodeMirror 6 (Luogu)
+    const cm6 = document.querySelector('.cm-editor');
+    if (cm6) {
+      const cmContent = cm6.querySelector('.cm-content');
+      if (cmContent) {
+        try {
+          cmContent.focus();
+          const sel = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(cmContent);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          const inserted = document.execCommand('insertText', false, source);
+          if (!inserted) return { ok: false, error: 'cm6 execCommand returned false' };
+          return { ok: true, kind: 'codemirror6' };
+        } catch (e) {
+          return { ok: false, error: 'cm6 insertText failed: ' + e.message };
+        }
+      }
+    }
     // Fall back to a plain source textarea
     const ta = document.querySelector('textarea[name="source"], textarea[name="sourceCode"]');
     if (ta) {

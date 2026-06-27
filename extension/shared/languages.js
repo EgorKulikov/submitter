@@ -42,16 +42,19 @@ window.__submitterLanguages = {
     { when: [/^c\#/i, "csharp", ".net"], options: /c\#|csharp|\.net/i },
   ],
   luogu: [
+    { when: [/^c\+\+\s*23\b/i], options: /c\+\+\s*23/i },
     { when: [/^c\+\+\s*20\b/i], options: /c\+\+\s*20/i },
     { when: [/^c\+\+\s*17\b/i], options: /c\+\+\s*17/i },
     { when: [/^c\+\+\s*14\b/i], options: /c\+\+\s*14/i },
+    { when: [/^c\+\+\s*11\b/i], options: /c\+\+\s*11/i },
+    { when: [/^c\+\+\s*98\b/i], options: /c\+\+\s*98/i },
     { when: [/^c\+\+$/i, /^g\+\+$/i, "cpp"], options: /^c\+\+/i },
     { when: [/^pypy/i], options: /pypy/i },
-    { when: [/^python\s*3/i, /^python$/i, "cpython"], options: /python.*3/i },
+    { when: [/^python\s*3/i, /^python$/i, "cpython"], options: /python\s*3/i },
     { when: [/^rust/i], options: /rust/i },
     { when: [/^java/i], options: /^java/i },
     { when: [/^kotlin/i], options: /kotlin/i },
-    { when: [/^go$/i, "golang"], options: /^go\s/i },
+    { when: [/^go$/i, "golang"], options: /^go\b/i },
   ],
 };
 

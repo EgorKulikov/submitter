@@ -116,15 +116,12 @@ impl LuoguClient {
 
     fn get_records(&self, pid: &str) -> Result<Vec<serde_json::Value>, String> {
         let url = format!(
-            "https://www.luogu.com.cn/record/list?user={}&pid={}&page=1",
+            "https://www.luogu.com.cn/record/list?user={}&pid={}&page=1&_contentOnly=1",
             self.uid, pid
         );
         let body = self.get_page(&url)?;
-        let re = Regex::new(r#"decodeURIComponent\("(.*?)"\)"#).unwrap();
-        let encoded = re.captures(&body).ok_or("Could not find data in page")?[1].to_string();
-        let decoded = urlencoded_decode(&encoded);
-        let data: serde_json::Value =
-            serde_json::from_str(&decoded).map_err(|e| format!("Failed to parse JSON: {}", e))?;
+        let data: serde_json::Value = serde_json::from_str(&body)
+            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
         Ok(data
             .pointer("/currentData/records/result")
             .and_then(|v| v.as_array())
@@ -133,13 +130,13 @@ impl LuoguClient {
     }
 
     fn get_record_detail(&self, record_id: &str) -> Result<serde_json::Value, String> {
-        let url = format!("https://www.luogu.com.cn/record/{}", record_id);
+        let url = format!(
+            "https://www.luogu.com.cn/record/{}?_contentOnly=1",
+            record_id
+        );
         let body = self.get_page(&url)?;
-        let re = Regex::new(r#"decodeURIComponent\("(.*?)"\)"#).unwrap();
-        let encoded = re.captures(&body).ok_or("Could not find data in page")?[1].to_string();
-        let decoded = urlencoded_decode(&encoded);
-        let data: serde_json::Value =
-            serde_json::from_str(&decoded).map_err(|e| format!("Failed to parse JSON: {}", e))?;
+        let data: serde_json::Value = serde_json::from_str(&body)
+            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
         data.pointer("/currentData/record")
             .cloned()
             .ok_or("No record data found".to_string())
@@ -323,24 +320,6 @@ fn first_fail_status(cases: &serde_json::Map<String, serde_json::Value>) -> Opti
         }
     }
     None
-}
-
-fn urlencoded_decode(s: &str) -> String {
-    let mut result = String::new();
-    let mut chars = s.chars();
-    while let Some(c) = chars.next() {
-        if c == '%' {
-            let hex: String = chars.by_ref().take(2).collect();
-            if let Ok(byte) = u8::from_str_radix(&hex, 16) {
-                result.push(byte as char);
-            }
-        } else if c == '+' {
-            result.push(' ');
-        } else {
-            result.push(c);
-        }
-    }
-    result
 }
 
 /// Parse Luogu URL
