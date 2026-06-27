@@ -398,7 +398,7 @@ pub fn submit(url: String, language: String, source: String) {
         },
         std::time::Duration::from_secs(30),
     ) {
-        Ok(h) => format!("{}#submitter={}:{}", submit_url, h.port, h.token),
+        Ok(h) => format!("{}#submitter={}:{}", url, h.port, h.token),
         Err(_) => submit_url.clone(),
     };
     open::that(&url_to_open).ok();
