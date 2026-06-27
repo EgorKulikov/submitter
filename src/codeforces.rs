@@ -302,7 +302,7 @@ pub fn submit(task_url: String, language: String, source: String) {
         Ok(h) => format!("{}#submitter={}:{}", submit_url, h.port, h.token),
         Err(_) => submit_url.clone(),
     };
-    open::that(&url_to_open).ok();
+    open::that_detached(&url_to_open).ok();
     let mut known_ids: std::collections::HashSet<i64> = std::collections::HashSet::new();
     let mut tracking_id: Option<i64> = None;
     let mut last_len = 0;

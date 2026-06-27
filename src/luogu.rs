@@ -401,7 +401,7 @@ pub fn submit(url: String, language: String, source: String) {
         Ok(h) => format!("{}#submitter={}:{}", url, h.port, h.token),
         Err(_) => submit_url.clone(),
     };
-    open::that(&url_to_open).ok();
+    open::that_detached(&url_to_open).ok();
 
     // Poll for new submission
     if let Err(e) = client.poll_verdict(&pid, &known_ids) {
