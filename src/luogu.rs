@@ -47,9 +47,10 @@ impl LuoguClient {
             return false;
         }
         match self.get_page("https://www.luogu.com.cn") {
-            Ok(body) => {
-                body.contains(&format!("\"uid\":{}", self.uid)) || body.contains("currentUser")
-            }
+            // Luogu embeds page data as a URL-encoded JSON blob in the HTML.
+            // A logged-in homepage contains "uid":<our-uid>; a logged-out page
+            // has "currentUser":null. Match the URL-encoded form ("=%22, :=%3A).
+            Ok(body) => body.contains(&format!("%22uid%22%3A{}", self.uid)),
             Err(_) => false,
         }
     }
