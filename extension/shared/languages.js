@@ -20,7 +20,18 @@ window.__submitterLanguages = {
     { name: "Go (1.20.6)",             match: [/^go$/i, "golang"] },
     { name: "Kotlin (1.8.20)",         match: [/^kotlin/i] },
   ],
-  codeforces: [],
+  codeforces: [
+    { name: "GNU G++23 14.2 (64 bit, msys2)",   match: ["c++23"] },
+    { name: "GNU G++20 13.2 (64 bit, winlibs)", match: ["c++20", "c++"] },
+    { name: "GNU G++17 7.3.0",                  match: ["c++17"] },
+    { name: "Python 3.8.10",                    match: [/^python\s*3/i, "cpython"] },
+    { name: "PyPy 3.10 (7.3.15, 64bit)",        match: [/^pypy/i] },
+    { name: "Rust 2021 (1.75.0)",               match: [/^rust/i] },
+    { name: "Java 21 64bit",                    match: [/^java/i] },
+    { name: "C# 10, .NET SDK 6.0",              match: [/^c\#/i, "csharp", ".net"] },
+    { name: "Go 1.22.2",                        match: [/^go$/i, "golang"] },
+    { name: "Kotlin 1.9.21",                    match: [/^kotlin/i] },
+  ],
   luogu: [],
 };
 
