@@ -112,7 +112,7 @@ fn main() {
     };
 
     match site_key.as_str() {
-        "codeforces.com" => codeforces::submit(url.clone(), source),
+        "codeforces.com" => codeforces::submit(url.clone(), language.clone(), source),
         "ucup.ac" => ucup::submit(url.clone(), language.clone(), source),
         "uoj.ac" => {
             let mut client = submitter::uoj::UojClient::new("https://uoj.ac", "UOJ");

@@ -253,14 +253,14 @@ pub fn login() {
     }
 }
 
-pub fn submit(task_url: String, source: String) {
+pub fn submit(task_url: String, language: String, source: String) {
     let data = if let Some(data) = read_data() {
         data
     } else {
         get_data()
     };
     let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
-    ctx.set_contents(source).unwrap();
+    ctx.set_contents(source.clone()).unwrap();
     let pos = match task_url.rfind("/problem/") {
         None => {
             eprintln!("Could not parse URL: {}", task_url);
@@ -290,7 +290,19 @@ pub fn submit(task_url: String, source: String) {
             problem_id
         )
     };
-    open::that(&submit_url).ok();
+    let url_to_open = match crate::extbridge::publish(
+        crate::extbridge::Job {
+            site: "codeforces",
+            url: submit_url.clone(),
+            language: language.clone(),
+            source: source.clone(),
+        },
+        std::time::Duration::from_secs(30),
+    ) {
+        Ok(h) => format!("{}#submitter={}:{}", submit_url, h.port, h.token),
+        Err(_) => submit_url.clone(),
+    };
+    open::that(&url_to_open).ok();
     let mut known_ids: std::collections::HashSet<i64> = std::collections::HashSet::new();
     let mut tracking_id: Option<i64> = None;
     let mut last_len = 0;

@@ -239,7 +239,7 @@ pub fn login() {
     }
 }
 
-pub fn submit(url: String, _language: String, source: String) {
+pub fn submit(url: String, language: String, source: String) {
     let mut client = AtcoderClient::new();
 
     if let Err(e) = client.login() {
@@ -266,7 +266,7 @@ pub fn submit(url: String, _language: String, source: String) {
 
     // Copy source to clipboard and open submit page
     let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
-    ctx.set_contents(source).unwrap();
+    ctx.set_contents(source.clone()).unwrap();
 
     let submit_url = if task_id.is_empty() {
         format!("https://atcoder.jp/contests/{}/submit", contest_id)
@@ -277,7 +277,19 @@ pub fn submit(url: String, _language: String, source: String) {
         )
     };
     println!("Source code copied to clipboard");
-    open::that(&submit_url).ok();
+    let url_to_open = match crate::extbridge::publish(
+        crate::extbridge::Job {
+            site: "atcoder",
+            url: submit_url.clone(),
+            language: language.clone(),
+            source: source.clone(),
+        },
+        std::time::Duration::from_secs(30),
+    ) {
+        Ok(h) => format!("{}#submitter={}:{}", submit_url, h.port, h.token),
+        Err(_) => submit_url.clone(),
+    };
+    open::that(&url_to_open).ok();
 
     // Poll for new submission
     if let Err(e) = client.poll_verdict(&contest_id, &known_ids) {
