@@ -369,7 +369,7 @@ pub fn submit(url: String, language: String, source: String) {
 
     let submit_url = format!("{}#submit", url);
     println!("Source code copied to clipboard");
-    let url_to_open = match crate::extbridge::publish(
+    let handoff = crate::extbridge::publish(
         crate::extbridge::Job {
             site: "luogu",
             url: submit_url.clone(),
@@ -377,14 +377,22 @@ pub fn submit(url: String, language: String, source: String) {
             source,
         },
         std::time::Duration::from_secs(60),
-    ) {
-        Ok(h) => format!("{}#submitter={}:{}", url, h.port, h.token),
-        Err(_) => submit_url.clone(),
+    ).ok();
+    let url_to_open = match handoff.as_ref() {
+        Some(h) => format!("{}#submitter={}:{}", url, h.port, h.token),
+        None => submit_url.clone(),
     };
     open::that_detached(&url_to_open).ok();
 
     // Poll for new submission
-    if let Err(e) = client.poll_verdict(&pid, &known_ids) {
-        eprintln!("Verdict polling failed: {}", e);
+    match client.poll_verdict(&pid, &known_ids) {
+        Ok(_) => {
+            if let Some(h) = handoff.as_ref() {
+                h.signal_close();
+            }
+        }
+        Err(e) => {
+            eprintln!("Verdict polling failed: {}", e);
+        }
     }
 }

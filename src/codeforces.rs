@@ -290,7 +290,7 @@ pub fn submit(task_url: String, language: String, source: String) {
             problem_id
         )
     };
-    let url_to_open = match crate::extbridge::publish(
+    let handoff = crate::extbridge::publish(
         crate::extbridge::Job {
             site: "codeforces",
             url: submit_url.clone(),
@@ -298,9 +298,10 @@ pub fn submit(task_url: String, language: String, source: String) {
             source,
         },
         std::time::Duration::from_secs(60),
-    ) {
-        Ok(h) => format!("{}#submitter={}:{}", submit_url, h.port, h.token),
-        Err(_) => submit_url.clone(),
+    ).ok();
+    let url_to_open = match handoff.as_ref() {
+        Some(h) => format!("{}#submitter={}:{}", submit_url, h.port, h.token),
+        None => submit_url.clone(),
     };
     open::that_detached(&url_to_open).ok();
     let mut known_ids: std::collections::HashSet<i64> = std::collections::HashSet::new();
@@ -404,5 +405,9 @@ pub fn submit(task_url: String, language: String, source: String) {
         }
         first = false;
         thread::sleep(Duration::from_secs(2));
+    }
+    // Only reached via break 'outer (final verdict received).
+    if let Some(h) = handoff.as_ref() {
+        h.signal_close();
     }
 }

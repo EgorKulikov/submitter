@@ -277,7 +277,7 @@ pub fn submit(url: String, language: String, source: String) {
         )
     };
     println!("Source code copied to clipboard");
-    let url_to_open = match crate::extbridge::publish(
+    let handoff = crate::extbridge::publish(
         crate::extbridge::Job {
             site: "atcoder",
             url: submit_url.clone(),
@@ -285,15 +285,23 @@ pub fn submit(url: String, language: String, source: String) {
             source,
         },
         std::time::Duration::from_secs(60),
-    ) {
-        Ok(h) => format!("{}#submitter={}:{}", submit_url, h.port, h.token),
-        Err(_) => submit_url.clone(),
+    ).ok();
+    let url_to_open = match handoff.as_ref() {
+        Some(h) => format!("{}#submitter={}:{}", submit_url, h.port, h.token),
+        None => submit_url.clone(),
     };
     open::that_detached(&url_to_open).ok();
 
     // Poll for new submission
-    if let Err(e) = client.poll_verdict(&contest_id, &known_ids) {
-        eprintln!("Verdict polling failed: {}", e);
+    match client.poll_verdict(&contest_id, &known_ids) {
+        Ok(_) => {
+            if let Some(h) = handoff.as_ref() {
+                h.signal_close();
+            }
+        }
+        Err(e) => {
+            eprintln!("Verdict polling failed: {}", e);
+        }
     }
 }
 

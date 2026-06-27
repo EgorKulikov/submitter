@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+
+const SERVER_LIFETIME_SECS: u64 = 600; // 10 minutes
 
 #[derive(Debug, Clone)]
 pub struct Job {
@@ -16,6 +19,13 @@ pub struct Job {
 pub struct Handoff {
     pub port: u16,
     pub token: String,
+    close_flag: Arc<AtomicBool>,
+}
+
+impl Handoff {
+    pub fn signal_close(&self) {
+        self.close_flag.store(true, Ordering::SeqCst);
+    }
 }
 
 fn gen_token() -> String {
@@ -77,22 +87,20 @@ pub fn publish(job: Job, ttl: Duration) -> Result<Handoff, String> {
     let token = store.insert(job, ttl);
 
     let store_t = Arc::clone(&store);
-    let deadline = Instant::now() + ttl + Duration::from_secs(1);
+    let close_flag = Arc::new(AtomicBool::new(false));
+    let close_flag_t = Arc::clone(&close_flag);
+    let deadline = Instant::now() + Duration::from_secs(SERVER_LIFETIME_SECS);
 
     thread::spawn(move || {
         listener.set_nonblocking(true).ok();
         loop {
             if Instant::now() > deadline {
-                return; // TTL+1s: give up so the thread doesn't leak forever.
+                return; // Overall cap: 10 minutes.
             }
             match listener.accept() {
                 Ok((stream, _)) => {
-                    let served = handle(stream, &store_t);
-                    if served {
-                        return; // Single-shot: served the job, we're done.
-                    }
-                    // 404s don't terminate the thread — a wrong path before the
-                    // real request shouldn't strand the submitter.
+                    handle(stream, &store_t, &*close_flag_t);
+                    // Keep the server running — /close/<token> may follow.
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     thread::sleep(Duration::from_millis(50));
@@ -102,10 +110,10 @@ pub fn publish(job: Job, ttl: Duration) -> Result<Handoff, String> {
         }
     });
 
-    Ok(Handoff { port, token })
+    Ok(Handoff { port, token, close_flag })
 }
 
-fn handle(mut stream: TcpStream, store: &Store) -> bool {
+fn handle(mut stream: TcpStream, store: &Store, close_flag: &AtomicBool) -> bool {
     stream.set_read_timeout(Some(Duration::from_secs(2))).ok();
     let reader_stream = match stream.try_clone() {
         Ok(s) => s,
@@ -138,49 +146,61 @@ fn handle(mut stream: TcpStream, store: &Store) -> bool {
         "OPTIONS" => {
             // Chrome's Private Network Access preflight: respond with PNA + CORS
             // headers but do NOT consume the token — the actual GET follows.
-            match path.strip_prefix("/job/") {
-                Some(_) => {
-                    let _ = stream.write_all(
-                        b"HTTP/1.1 204 No Content\r\n\
-                          Access-Control-Allow-Origin: *\r\n\
-                          Access-Control-Allow-Methods: GET\r\n\
-                          Access-Control-Allow-Headers: *\r\n\
-                          Access-Control-Allow-Private-Network: true\r\n\
-                          Access-Control-Max-Age: 60\r\n\
-                          Connection: close\r\n\r\n",
-                    );
-                    false // keep the server thread alive for the real GET
-                }
-                None => { write_404(&mut stream); false }
+            if path.strip_prefix("/job/").is_some() || path.strip_prefix("/close/").is_some() {
+                let _ = stream.write_all(
+                    b"HTTP/1.1 204 No Content\r\n\
+                      Access-Control-Allow-Origin: *\r\n\
+                      Access-Control-Allow-Methods: GET\r\n\
+                      Access-Control-Allow-Headers: *\r\n\
+                      Access-Control-Allow-Private-Network: true\r\n\
+                      Access-Control-Max-Age: 60\r\n\
+                      Connection: close\r\n\r\n",
+                );
+                false // keep the server thread alive for the real GET
+            } else {
+                write_404(&mut stream);
+                false
             }
         }
         "GET" => {
-            let token = match path.strip_prefix("/job/") {
-                Some(t) => t,
-                None => { write_404(&mut stream); return false; }
-            };
-
-            match store.take(token) {
-                Some(job) => {
-                    let body = serde_json::json!({
-                        "site": job.site,
-                        "url": job.url,
-                        "language": job.language,
-                        "source": job.source,
-                    }).to_string();
-                    let response = format!(
-                        "HTTP/1.1 200 OK\r\n\
-                         Content-Type: application/json\r\n\
-                         Content-Length: {}\r\n\
-                         Access-Control-Allow-Origin: *\r\n\
-                         Access-Control-Allow-Private-Network: true\r\n\
-                         Connection: close\r\n\r\n{}",
-                        body.len(), body
-                    );
-                    let _ = stream.write_all(response.as_bytes());
-                    true
+            if let Some(token) = path.strip_prefix("/job/") {
+                match store.take(token) {
+                    Some(job) => {
+                        let body = serde_json::json!({
+                            "site": job.site,
+                            "url": job.url,
+                            "language": job.language,
+                            "source": job.source,
+                        }).to_string();
+                        let response = format!(
+                            "HTTP/1.1 200 OK\r\n\
+                             Content-Type: application/json\r\n\
+                             Content-Length: {}\r\n\
+                             Access-Control-Allow-Origin: *\r\n\
+                             Access-Control-Allow-Private-Network: true\r\n\
+                             Connection: close\r\n\r\n{}",
+                            body.len(), body
+                        );
+                        let _ = stream.write_all(response.as_bytes());
+                        false // Keep running for the /close endpoint.
+                    }
+                    None => { write_404(&mut stream); false }
                 }
-                None => { write_404(&mut stream); false }
+            } else if path.strip_prefix("/close/").is_some() {
+                if close_flag.load(Ordering::SeqCst) {
+                    let _ = stream.write_all(
+                        b"HTTP/1.1 204 No Content\r\n\
+                          Access-Control-Allow-Origin: *\r\n\
+                          Access-Control-Allow-Private-Network: true\r\n\
+                          Connection: close\r\n\r\n",
+                    );
+                } else {
+                    write_404(&mut stream);
+                }
+                false // server keeps running
+            } else {
+                write_404(&mut stream);
+                false
             }
         }
         _ => { write_404(&mut stream); false }
@@ -256,11 +276,11 @@ mod tests {
         assert_eq!(v["language"], "C++");
         assert_eq!(v["source"], "int main(){}");
 
-        // Second request: 404, server has shut down so this may also fail to connect.
+        // Second request: 404 (token consumed; server stays alive for /close endpoint).
         let r2 = reqwest::blocking::get(&url);
         match r2 {
             Ok(resp) => assert_eq!(resp.status(), 404),
-            Err(_) => {} // Connection refused is also acceptable — server exited.
+            Err(_) => {} // Connection refused is also acceptable.
         }
     }
 
@@ -328,6 +348,42 @@ mod tests {
         assert_eq!(
             r.headers().get("access-control-allow-origin").and_then(|v| v.to_str().ok()),
             Some("*")
+        );
+    }
+
+    #[test]
+    fn close_endpoint_returns_404_until_signaled_then_204() {
+        let job = Job {
+            site: "atcoder", url: "x".into(), language: "y".into(), source: "z".into(),
+        };
+        let handoff = publish(job, Duration::from_secs(30)).unwrap();
+        let close_url = format!("http://127.0.0.1:{}/close/{}", handoff.port, handoff.token);
+
+        // Before signaling, /close returns 404
+        let r1 = reqwest::blocking::get(&close_url).unwrap();
+        assert_eq!(r1.status(), 404);
+
+        handoff.signal_close();
+
+        // After signaling, /close returns 204
+        let r2 = reqwest::blocking::get(&close_url).unwrap();
+        assert_eq!(r2.status(), 204);
+    }
+
+    #[test]
+    fn options_preflight_accepts_close_path() {
+        let job = Job {
+            site: "atcoder", url: "x".into(), language: "y".into(), source: "z".into(),
+        };
+        let handoff = publish(job, Duration::from_secs(30)).unwrap();
+        let close_url = format!("http://127.0.0.1:{}/close/{}", handoff.port, handoff.token);
+
+        let client = reqwest::blocking::Client::new();
+        let r = client.request(reqwest::Method::OPTIONS, &close_url).send().unwrap();
+        assert_eq!(r.status(), 204);
+        assert_eq!(
+            r.headers().get("access-control-allow-private-network").and_then(|v| v.to_str().ok()),
+            Some("true")
         );
     }
 }

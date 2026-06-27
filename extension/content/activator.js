@@ -10,6 +10,11 @@
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     job = await r.json();
     try { sessionStorage.removeItem('__submitterHandoff'); } catch (_) {}
+    chrome.runtime.sendMessage({
+      type: 'submitter:close-when-ready',
+      port: handoff.port,
+      token: handoff.token,
+    }).catch(() => {}); // background not loaded yet shouldn't break anything
   } catch (e) {
     window.notify(`couldn't reach helper (${e.message || 'unknown error'}). Paste from clipboard.`);
     return;
