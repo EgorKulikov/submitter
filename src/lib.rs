@@ -7,6 +7,7 @@ pub mod luogu;
 pub mod codeforces;
 pub mod repovive;
 pub mod eolymp;
+pub mod extbridge;
 pub mod http;
 pub mod toph;
 pub mod ucup;
