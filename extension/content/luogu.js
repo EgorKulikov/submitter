@@ -36,7 +36,7 @@ if (location.hostname === 'www.luogu.com.cn') {
     // Click the dropdown trigger to open the menu, then click the matching item.
     // Luogu's exact selectors should be verified on a live page — adjust as needed.
     const trigger = await waitFor(
-      () => document.querySelector('.lg-dropdown[data-v-]') || document.querySelector('.lg-select'),
+      () => document.querySelector('.lg-dropdown') || document.querySelector('.lg-select'),
       timeoutMs
     );
     if (!trigger) return false;
