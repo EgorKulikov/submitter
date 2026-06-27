@@ -11,6 +11,9 @@ atlas-submit.py
 .idea/
 *:Zone.Identifier
 
+# Superpowers scratch (ledgers, briefs, review packages)
+.superpowers/
+
 # Local debugging artifacts that must never end up in the repo
 *.har
 toph_arena_debug.html
