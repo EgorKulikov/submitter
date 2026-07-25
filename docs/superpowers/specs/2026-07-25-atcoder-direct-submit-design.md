@@ -98,13 +98,12 @@ Source-of-truth note: the JS table stays canonical for the browser flow, the Rus
 
 ## HTTP hygiene
 
-The current `AtcoderClient` builds an ad-hoc `reqwest::blocking::Client` inside `get_page` with a real-browser `User-Agent`, while `self.http` (an `HttpClient`) sends reqwest's default UA (`reqwest/x.y.z`) — a red flag AtCoder could easily filter on. As part of this work:
+Two prep changes to `self.http` before direct-submit can ride on it:
 
-- `AtcoderClient::new` sets `self.http.set_header("User-Agent", USER_AGENT)` using the same `Mozilla/5.0…` constant already at the top of the file.
-- `get_page` is rewritten to use `self.http.get_text` instead of its own reqwest client. Same UA, same cookies, redirect handling comes from `HttpClient::follow_redirect`.
-- Direct-submit GET + POST go through the same `self.http`.
+- **User-Agent**: `AtcoderClient::new` sets `self.http.set_header("User-Agent", USER_AGENT)` using the same `Mozilla/5.0…` constant already at the top of the file. `self.http` currently sends reqwest's default (`reqwest/x.y.z`), which AtCoder could easily filter on.
+- **Cookie key migration**: today `login()` stores the session cookie under key `"atcoder_revel_session"` in the on-disk store, but the cookie AtCoder actually expects is named `REVEL_SESSION`. This works today because `self.http` is only used as a storage backend — `get_page` manually builds a `Cookie: REVEL_SESSION=…` header. But once direct-submit calls `self.http.get_text` / `post_form_raw`, `self.http`'s auto-cookie-injection would send `atcoder_revel_session=…` (an unrecognized name) and AtCoder would treat us as logged out. We rename to `REVEL_SESSION` and add a one-time read-fallback in `new` from the legacy key so existing users don't have to re-login.
 
-Result: one HTTP client, one UA, one cookie store, consistently applied.
+We do **not** rewrite `get_page` to go through `self.http`. `get_page` uses an ad-hoc `reqwest::blocking::Client` with `Policy::limited(5)`; `HttpClient` uses `Policy::none()` + one manual follow. Rewriting would silently narrow redirect handling for no gain. `get_page` stays as-is; direct-submit rides on the fixed-up `self.http`.
 
 ## Error output and UX
 
@@ -120,7 +119,7 @@ Rationale: we want the user to know *why* the fallback happened when it does, bu
 
 ## Files touched
 
-- `src/atcoder.rs` — add `try_direct_submit`, `parse_csrf`, `parse_language_options`, `classify_submit_response`; wire into `submit()`; drop ad-hoc reqwest client in `get_page`; set UA on `self.http`.
+- `src/atcoder.rs` — add `try_direct_submit`, `parse_csrf`, `parse_language_options`, `classify_submit_response`; wire into `submit()`; set UA on `self.http`; migrate session cookie key to `REVEL_SESSION`. Leaves `get_page` on its ad-hoc reqwest client.
 - `src/langmatch.rs` — new file (~80 LoC), port of the JS matcher.
 - `src/lib.rs` — add `pub mod langmatch;`.
 - `src/http.rs` — add `post_form_raw` (POST without following the 302). We need to inspect `Location` on the POST response to distinguish "redirected to /submissions" (success) from "redirected to /login" (session died). The existing `post_form` auto-follows the redirect via `follow_redirect`, which loses the 302 signal.
