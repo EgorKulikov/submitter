@@ -17,8 +17,20 @@ struct AtcoderClient {
 
 impl AtcoderClient {
     fn new() -> Self {
-        let http = HttpClient::new("https://atcoder.jp");
-        let revel_session = http.get_cookie("atcoder_revel_session").unwrap_or_default();
+        let mut http = HttpClient::new("https://atcoder.jp");
+        http.set_header("User-Agent", USER_AGENT);
+        // Read the session cookie under its canonical name (REVEL_SESSION), and
+        // fall back to the legacy key "atcoder_revel_session" for existing users.
+        // If we found it under the legacy key, migrate it forward so self.http's
+        // auto-injection sends the right cookie name to AtCoder.
+        let revel_session = if let Some(v) = http.get_cookie("REVEL_SESSION") {
+            v
+        } else if let Some(v) = http.get_cookie("atcoder_revel_session") {
+            http.set_cookie("REVEL_SESSION", &v);
+            v
+        } else {
+            String::new()
+        };
         AtcoderClient {
             http,
             revel_session,
@@ -90,7 +102,7 @@ impl AtcoderClient {
 
         self.revel_session = session.clone();
         if self.is_logged_in() {
-            self.http.set_cookie("atcoder_revel_session", &session);
+            self.http.set_cookie("REVEL_SESSION", &session);
             println!("Login successful");
             Ok(())
         } else {
