@@ -355,7 +355,8 @@ pub fn submit(url: String, language: String, source: String) {
         }
     };
 
-    // Record existing submissions before opening browser
+    // Record existing submissions before we submit — used by poll_verdict
+    // to detect the new one whether it came via direct POST or via browser.
     let mut known_ids = std::collections::HashSet::new();
     if let Ok(body) = client.get_page(&format!("/contests/{}/submissions/me", contest_id)) {
         let sub_re = Regex::new(r"/submissions/(\d+)").unwrap();
@@ -364,7 +365,22 @@ pub fn submit(url: String, language: String, source: String) {
         }
     }
 
-    // Copy source to clipboard and open submit page
+    // Try the direct HTTPS POST first. Any failure = fall back to browser.
+    println!("Submitting...");
+    match client.try_direct_submit(&contest_id, &task_id, &language, &source) {
+        Ok(()) => {
+            // Direct submit succeeded — no browser needed, no clipboard needed.
+            if let Err(e) = client.poll_verdict(&contest_id, &known_ids, || {}) {
+                eprintln!("Verdict polling failed: {}", e);
+            }
+            return;
+        }
+        Err(reason) => {
+            eprintln!("Direct submission failed ({}), opening browser instead.", reason);
+        }
+    }
+
+    // Fallback: existing browser handoff flow.
     let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
     ctx.set_contents(source.clone()).unwrap();
 
@@ -392,7 +408,6 @@ pub fn submit(url: String, language: String, source: String) {
     };
     open::that_detached(&url_to_open).ok();
 
-    // Poll for new submission
     if let Err(e) = client.poll_verdict(&contest_id, &known_ids, || {
         if let Some(h) = handoff.as_ref() {
             h.signal_close();
