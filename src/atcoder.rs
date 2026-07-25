@@ -19,6 +19,11 @@ impl AtcoderClient {
     fn new() -> Self {
         let mut http = HttpClient::new("https://atcoder.jp");
         http.set_header("User-Agent", USER_AGENT);
+        // Origin/Referer are constant for this client — Cloudflare bot heuristics
+        // and CSRF filters weigh these, so set them once here rather than risk
+        // the direct-submit POST silently degrading to always-fallback.
+        http.set_header("Origin", "https://atcoder.jp");
+        http.set_header("Referer", "https://atcoder.jp/");
         // Read the session cookie under its canonical name (REVEL_SESSION), and
         // fall back to the legacy key "atcoder_revel_session" for existing users.
         // If we found it under the legacy key, migrate it forward so self.http's
@@ -285,6 +290,15 @@ fn parse_language_options(html: &str) -> Vec<(String, String)> {
 /// Given the raw POST response's status + `Location` header, decide whether
 /// the direct submission succeeded. Success = 302 whose Location contains
 /// "/submissions". Everything else = fallback trigger.
+///
+/// Trade-off: an unexpected Location returns `Err`, which sends the caller
+/// down the browser-fallback path — but the direct POST may have already
+/// succeeded server-side. Since `known_ids` is snapshotted before the direct
+/// POST, `poll_verdict` would then see both the direct submission and the
+/// browser-fallback resubmission as "new" and could latch onto either one.
+/// Accepted trade-off: AtCoder is not observed to redirect anywhere other
+/// than /submissions or /login; if that changes, we may want to poll for a
+/// new submission before falling back instead of unconditionally resubmitting.
 fn classify_submit_response(status: u16, location: Option<&str>) -> Result<(), String> {
     if status == 200 {
         return Err("POST returned 200 (form re-rendered — validation failed?)".to_string());
@@ -298,6 +312,8 @@ fn classify_submit_response(status: u16, location: Option<&str>) -> Result<(), S
     } else if loc.contains("/login") {
         Err("POST redirected to /login (session expired?)".to_string())
     } else {
+        // Unexpected Location: falls back to browser submit, which re-submits.
+        // See trade-off note on this function's doc comment above.
         Err(format!("POST redirected to unexpected Location: {}", loc))
     }
 }
