@@ -336,6 +336,39 @@ impl HttpClient {
         self.follow_redirect(resp)
     }
 
+    /// Like `post_form`, but returns the raw response without following any 302.
+    /// Callers that need to inspect the `Location` header (e.g. to distinguish
+    /// success-redirect from session-expired-redirect) use this.
+    pub fn post_form_raw(
+        &mut self,
+        path: &str,
+        form: &[(&str, &str)],
+    ) -> Result<reqwest::blocking::Response, String> {
+        let url = self.resolve_url(path);
+        let cookie_header = self.cookie_header();
+        let headers = self.extra_headers.clone();
+        let send_cookies = self.send_cookies;
+        let form_owned: Vec<(String, String)> =
+            form.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        let resp = self.send_with_retry(
+            || {
+                let mut req = self.client.post(&url);
+                if send_cookies && !cookie_header.is_empty() {
+                    req = req.header(COOKIE, &cookie_header);
+                }
+                for (name, value) in &headers {
+                    req = req.header(name.clone(), value.clone());
+                }
+                let form_ref: Vec<(&str, &str)> =
+                    form_owned.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+                req.form(&form_ref)
+            },
+            &url,
+        )?;
+        self.save_response_cookies(&resp);
+        Ok(resp)
+    }
+
     pub fn post_json(
         &mut self,
         path: &str,
@@ -397,5 +430,17 @@ impl HttpClient {
                 &body[..body.len().min(200)]
             )
         })
+    }
+}
+
+#[cfg(test)]
+mod post_form_raw_tests {
+    // We can't easily spin up a server in unit tests without extra deps.
+    // Compile-time test: verify the method exists with the expected signature.
+    #[allow(dead_code)]
+    fn _signature_check() {
+        fn takes<F>(_: F) where F: for<'a> Fn(&'a mut super::HttpClient, &'a str, &'a [(&'a str, &'a str)])
+            -> Result<reqwest::blocking::Response, String> {}
+        takes(|c, p, f| c.post_form_raw(p, f));
     }
 }
