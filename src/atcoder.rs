@@ -204,6 +204,48 @@ impl AtcoderClient {
     }
 }
 
+fn parse_csrf(html: &str) -> Option<String> {
+    let re = Regex::new(r#"(?is)<input[^>]*name="csrf_token"[^>]*value="([^"]+)""#).ok()?;
+    re.captures(html).map(|c| c[1].to_string())
+}
+
+fn parse_language_options(html: &str) -> Vec<(String, String)> {
+    let sel_re = Regex::new(
+        r#"(?is)<select[^>]*name="data\.LanguageId"[^>]*>(.*?)</select>"#,
+    )
+    .unwrap();
+    let opt_re =
+        Regex::new(r#"(?is)<option[^>]*value="([^"]+)"[^>]*>(.*?)</option>"#).unwrap();
+    let inner = match sel_re.captures(html) {
+        Some(c) => c[1].to_string(),
+        None => return Vec::new(),
+    };
+    opt_re
+        .captures_iter(&inner)
+        .map(|c| (c[1].to_string(), c[2].trim().to_string()))
+        .collect()
+}
+
+/// Given the raw POST response's status + `Location` header, decide whether
+/// the direct submission succeeded. Success = 302 whose Location contains
+/// "/submissions". Everything else = fallback trigger.
+fn classify_submit_response(status: u16, location: Option<&str>) -> Result<(), String> {
+    if status == 200 {
+        return Err("POST returned 200 (form re-rendered — validation failed?)".to_string());
+    }
+    if !(300..400).contains(&status) {
+        return Err(format!("POST returned {}", status));
+    }
+    let loc = location.ok_or_else(|| "POST redirected with no Location header".to_string())?;
+    if loc.contains("/submissions") {
+        Ok(())
+    } else if loc.contains("/login") {
+        Err("POST redirected to /login (session expired?)".to_string())
+    } else {
+        Err(format!("POST redirected to unexpected Location: {}", loc))
+    }
+}
+
 fn group_digits(score: &str) -> String {
     let s = score.trim();
     if s.is_empty() || !s.chars().all(|c| c.is_ascii_digit()) {
@@ -329,5 +371,78 @@ mod tests {
     fn passes_through_non_digit() {
         assert_eq!(group_digits(""), "");
         assert_eq!(group_digits("abc"), "abc");
+    }
+
+    use super::{parse_csrf, parse_language_options, classify_submit_response};
+
+    #[test]
+    fn parse_csrf_extracts_token() {
+        let html = r#"<form><input type="hidden" name="csrf_token" value="abc123XYZ=="></form>"#;
+        assert_eq!(parse_csrf(html).as_deref(), Some("abc123XYZ=="));
+    }
+
+    #[test]
+    fn parse_csrf_handles_attribute_order() {
+        let html = r#"<input value="tok999" name="csrf_token" type="hidden">"#;
+        // Same-line, name comes after value — our regex looks for name= first,
+        // so this variant is expected to miss. Document that: if AtCoder ever
+        // reorders attributes, we fall back to browser (safe) rather than parse.
+        assert_eq!(parse_csrf(html), None);
+    }
+
+    #[test]
+    fn parse_csrf_missing_returns_none() {
+        let html = "<form></form>";
+        assert_eq!(parse_csrf(html), None);
+    }
+
+    #[test]
+    fn parse_language_options_extracts_pairs() {
+        let html = r#"
+          <select name="data.LanguageId" class="form-control">
+            <option value="5001">C++ 17 (gcc 9.2.1)</option>
+            <option value="5054">Rust (rustc 1.70.0)</option>
+          </select>
+        "#;
+        let opts = parse_language_options(html);
+        assert_eq!(opts.len(), 2);
+        assert_eq!(opts[0], ("5001".to_string(), "C++ 17 (gcc 9.2.1)".to_string()));
+        assert_eq!(opts[1], ("5054".to_string(), "Rust (rustc 1.70.0)".to_string()));
+    }
+
+    #[test]
+    fn parse_language_options_missing_select_returns_empty() {
+        assert!(parse_language_options("<html></html>").is_empty());
+    }
+
+    #[test]
+    fn parse_language_options_empty_select_returns_empty() {
+        let html = r#"<select name="data.LanguageId"></select>"#;
+        assert!(parse_language_options(html).is_empty());
+    }
+
+    #[test]
+    fn classify_302_to_submissions_is_ok() {
+        assert!(classify_submit_response(302, Some("/contests/abc463/submissions/me")).is_ok());
+    }
+
+    #[test]
+    fn classify_302_to_login_is_err() {
+        assert!(classify_submit_response(302, Some("/login")).is_err());
+    }
+
+    #[test]
+    fn classify_302_without_location_is_err() {
+        assert!(classify_submit_response(302, None).is_err());
+    }
+
+    #[test]
+    fn classify_200_is_err() {
+        assert!(classify_submit_response(200, None).is_err());
+    }
+
+    #[test]
+    fn classify_403_is_err() {
+        assert!(classify_submit_response(403, None).is_err());
     }
 }
