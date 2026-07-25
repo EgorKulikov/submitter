@@ -111,6 +111,50 @@ impl AtcoderClient {
         }
     }
 
+    fn try_direct_submit(
+        &mut self,
+        contest_id: &str,
+        task_id: &str,
+        language: &str,
+        source: &str,
+    ) -> Result<(), String> {
+        if task_id.is_empty() {
+            return Err("no task in URL".to_string());
+        }
+
+        let submit_path = format!("/contests/{}/submit", contest_id);
+        let page = self.http.get_text(&submit_path)
+            .map_err(|e| format!("GET submit page failed: {}", e))?;
+
+        let csrf = parse_csrf(&page)
+            .ok_or_else(|| "CSRF token not found on submit page".to_string())?;
+
+        let options = parse_language_options(&page);
+        if options.is_empty() {
+            return Err("no language options found on submit page".to_string());
+        }
+        let lang_id = crate::langmatch::pick_option("atcoder", language, &options)
+            .ok_or_else(|| format!("no matching language for {:?}", language))?;
+
+        let resp = self.http.post_form_raw(
+            &submit_path,
+            &[
+                ("csrf_token", &csrf),
+                ("data.TaskScreenName", task_id),
+                ("data.LanguageId", &lang_id),
+                ("sourceCode", source),
+            ],
+        )?;
+
+        let status = resp.status().as_u16();
+        let location = resp
+            .headers()
+            .get("location")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+        classify_submit_response(status, location.as_deref())
+    }
+
     fn poll_verdict<F: FnMut()>(
         &self,
         contest_id: &str,
