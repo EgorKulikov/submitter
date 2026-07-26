@@ -138,6 +138,18 @@ impl NewYandexClient {
         let (compiler_id, compiler_name) = pick_compiler(&compilers, language)?;
         println!("Language: {}", compiler_name);
 
+        // The browser always sends Origin + a problem-page Referer on POSTs.
+        // Yandex 403s the submit without them.
+        let encoded_problem = problem_id.replace('/', "%2F");
+        self.http.set_header("Origin", BASE_URL);
+        self.http.set_header(
+            "Referer",
+            &format!(
+                "{}/contests/{}/problems?id={}",
+                BASE_URL, contest_id, encoded_problem
+            ),
+        );
+
         let form = multipart::Form::new()
             .text("contestId", contest_id.to_string())
             .text("problemId", problem_id.to_string())
