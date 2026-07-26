@@ -358,62 +358,19 @@ impl YandexClient {
 /// Parse yandex contest URL
 /// https://contest.yandex.com/contest/3/problems/B/ -> ("3", "B")
 /// https://contest.yandex.ru/contest/3/problems/B/ -> ("3", "B")
-/// https://new.contest.yandex.ru/contests/90041/problems?id=7847119%2F.../ -> ("90041", "7847119/...")
 fn parse_url(url: &str) -> Option<(String, String)> {
-    let (path, query) = match url.split_once('?') {
-        Some((p, q)) => (p, Some(q)),
-        None => (url, None),
-    };
-    let path = path.trim_end_matches('/');
-
-    // Old (singular) form: contest/ID/problems/LETTER
+    // Strip query parameters first
+    let url = url.split('?').next().unwrap_or(url);
+    let url = url.trim_end_matches('/');
+    // Try with specific problem: contest/ID/problems/LETTER
     let re = regex::Regex::new(r"contest/(\d+)/problems/([A-Za-z0-9_]+)").ok()?;
-    if let Some(caps) = re.captures(path) {
+    if let Some(caps) = re.captures(url) {
         return Some((caps[1].to_string(), caps[2].to_string()));
     }
-
-    // New (plural) form: contests/ID/problems?id=<problem-id>[%2F<date>%2F<tag>]
-    // Only the first path segment (the numeric problem id) is what the submit
-    // API expects — the rest of the decoded id is date/tag routing metadata.
-    let re = regex::Regex::new(r"contests/(\d+)/problems").ok()?;
-    if let Some(caps) = re.captures(path) {
-        if let Some(q) = query {
-            for kv in q.split('&') {
-                if let Some(v) = kv.strip_prefix("id=") {
-                    let decoded = percent_decode(v);
-                    let problem = decoded.split('/').next().unwrap_or(&decoded).to_string();
-                    return Some((caps[1].to_string(), problem));
-                }
-            }
-        }
-        return Some((caps[1].to_string(), "A".to_string()));
-    }
-
-    // Bare contest URL (either singular or plural) — default problem to A
-    let re = regex::Regex::new(r"contests?/(\d+)").ok()?;
-    let caps = re.captures(path)?;
+    // Contest URL without problem — default to A
+    let re = regex::Regex::new(r"contest/(\d+)").ok()?;
+    let caps = re.captures(url)?;
     Some((caps[1].to_string(), "A".to_string()))
-}
-
-fn percent_decode(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let (Some(h), Some(l)) = (
-                (bytes[i + 1] as char).to_digit(16),
-                (bytes[i + 2] as char).to_digit(16),
-            ) {
-                out.push((h * 16 + l) as u8);
-                i += 3;
-                continue;
-            }
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// Convert "WrongAnswer" -> "Wrong Answer", "OK" -> "Accepted"
@@ -487,10 +444,10 @@ pub fn submit(url: String, language: String, source: String) {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_url, percent_decode};
+    use super::parse_url;
 
     #[test]
-    fn parses_old_singular_contest_url() {
+    fn parses_singular_contest_url() {
         assert_eq!(
             parse_url("https://contest.yandex.com/contest/3/problems/B/"),
             Some(("3".to_string(), "B".to_string())),
@@ -502,40 +459,10 @@ mod tests {
     }
 
     #[test]
-    fn parses_new_plural_contest_url_with_id_query() {
-        // Only the first path segment of the decoded id is the actual problem
-        // id the submit API accepts — the trailing date/tag is routing metadata.
-        assert_eq!(
-            parse_url("https://new.contest.yandex.ru/contests/90041/problems?id=7847119%2F2026_02_09%2FJRsW2izyhj"),
-            Some(("90041".to_string(), "7847119".to_string())),
-        );
-    }
-
-    #[test]
-    fn parses_new_plural_contest_url_with_simple_id() {
-        assert_eq!(
-            parse_url("https://new.contest.yandex.ru/contests/42/problems?id=B"),
-            Some(("42".to_string(), "B".to_string())),
-        );
-    }
-
-    #[test]
     fn parses_bare_contest_url_defaults_to_a() {
         assert_eq!(
             parse_url("https://contest.yandex.com/contest/7"),
             Some(("7".to_string(), "A".to_string())),
         );
-        assert_eq!(
-            parse_url("https://new.contest.yandex.ru/contests/90041/problems"),
-            Some(("90041".to_string(), "A".to_string())),
-        );
-    }
-
-    #[test]
-    fn percent_decodes_basic_sequences() {
-        assert_eq!(percent_decode("7847119%2F2026"), "7847119/2026");
-        assert_eq!(percent_decode("no%20escapes%21"), "no escapes!");
-        assert_eq!(percent_decode("plain"), "plain");
-        assert_eq!(percent_decode("%2G"), "%2G"); // bad hex — passes through
     }
 }

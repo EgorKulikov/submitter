@@ -2,16 +2,16 @@ use regex::Regex;
 use std::env;
 use std::fs::read_to_string;
 use submitter::{
-    atcoder, codechef, coderun, codeforces, eolymp, kattis, kep, luogu, repovive, toph, ucup,
-    yandex,
+    atcoder, codechef, coderun, codeforces, eolymp, kattis, kep, luogu, new_yandex, repovive,
+    toph, ucup, yandex,
 };
 
 fn site_key_from_url(url: &str) -> Option<String> {
     let url_regex = Regex::new(r"https?://(?:www\.)?([^/]+).*").unwrap();
     let domain = url_regex.captures(url)?[1].to_string();
-    // CodeRun lives on a Yandex subdomain but is a separate site, so keep the
-    // full hostname instead of collapsing to yandex.ru.
-    if domain == "coderun.yandex.ru" {
+    // CodeRun and the new Contest UI live on Yandex subdomains but are separate
+    // sites, so keep the full hostname instead of collapsing to yandex.ru.
+    if domain == "coderun.yandex.ru" || domain == "new.contest.yandex.ru" {
         return Some(domain);
     }
     let domain_parts: Vec<&str> = domain.split('.').collect();
@@ -47,6 +47,7 @@ fn short_name_to_site_key(name: &str) -> Option<String> {
         "luogu" | "lg" => "luogu.com.cn",
         "eolymp" | "eol" => "eolymp.com",
         "coderun" | "cr" => "coderun.yandex.ru",
+        "ncy" | "newyandex" => "new.contest.yandex.ru",
         "kep" | "kepuz" => "kep.uz",
         "repovive" | "rv" => "repovive.com",
         _ => return None,
@@ -72,6 +73,7 @@ fn do_login(site_key: &str) {
         "luogu.com.cn" => luogu::login(),
         "eolymp.com" => eolymp::login(),
         "coderun.yandex.ru" => coderun::login(),
+        "new.contest.yandex.ru" => new_yandex::login(),
         "kep.uz" => kep::login(),
         "repovive.com" => repovive::login(),
         _ => eprintln!("Unsupported site: {}", site_key),
@@ -135,6 +137,7 @@ fn main() {
         "luogu.com.cn" => luogu::submit(url.clone(), language.clone(), source),
         "eolymp.com" => eolymp::submit(url.clone(), language.clone(), source),
         "coderun.yandex.ru" => coderun::submit(url.clone(), language.clone(), source),
+        "new.contest.yandex.ru" => new_yandex::submit(url.clone(), language.clone(), source),
         "kep.uz" => kep::submit(url.clone(), language.clone(), source),
         "repovive.com" => repovive::submit(url.clone(), language.clone(), source),
         _ => println!("Unsupported domain: {}", site_key),

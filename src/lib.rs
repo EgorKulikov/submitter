@@ -5,6 +5,7 @@ pub mod kattis;
 pub mod kep;
 pub mod langmatch;
 pub mod luogu;
+pub mod new_yandex;
 pub mod codeforces;
 pub mod repovive;
 pub mod eolymp;
