@@ -264,7 +264,10 @@ impl YandexClient {
             .map_err(|e| format!("Failed to read submit response: {}", e))?;
 
         if !status.is_success() {
-            return Err(format!("Submit failed ({}): {}", status, body));
+            return Err(format!(
+                "Submit failed ({}) — contest={} problem={} compiler={}: {}",
+                status, contest_id, problem, compiler_id, body
+            ));
         }
 
         let json: serde_json::Value = serde_json::from_str(&body)

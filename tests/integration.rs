@@ -91,7 +91,7 @@ fn test_yandex() {
     let (compiler_id, _) = client.find_compiler("C++").unwrap();
     let run_id = client
         .submit(
-            "3",
+            "90118",
             "B",
             &compiler_id,
             r#"#include <fstream>
@@ -105,7 +105,7 @@ int main() {
 }"#,
         )
         .unwrap();
-    let verdict = client.poll_verdict("3", run_id).unwrap();
+    let verdict = client.poll_verdict("90118", run_id).unwrap();
     assert!(
         verdict == "OK" || verdict == "Accepted",
         "Expected AC, got: {}",
@@ -122,7 +122,7 @@ fn test_yandex_rust() {
     let (compiler_id, _) = client.find_compiler("Rust").unwrap();
     let run_id = client
         .submit(
-            "3",
+            "90118",
             "B",
             &compiler_id,
             r#"use std::io::{Read, Write};
@@ -136,7 +136,7 @@ fn main() {
 }"#,
         )
         .unwrap();
-    let verdict = client.poll_verdict("3", run_id).unwrap();
+    let verdict = client.poll_verdict("90118", run_id).unwrap();
     assert!(
         verdict == "OK" || verdict == "Accepted",
         "Expected AC, got: {}",
