@@ -372,13 +372,17 @@ fn parse_url(url: &str) -> Option<(String, String)> {
         return Some((caps[1].to_string(), caps[2].to_string()));
     }
 
-    // New (plural) form: contests/ID/problems?id=<url-encoded-problem-id>
+    // New (plural) form: contests/ID/problems?id=<problem-id>[%2F<date>%2F<tag>]
+    // Only the first path segment (the numeric problem id) is what the submit
+    // API expects — the rest of the decoded id is date/tag routing metadata.
     let re = regex::Regex::new(r"contests/(\d+)/problems").ok()?;
     if let Some(caps) = re.captures(path) {
         if let Some(q) = query {
             for kv in q.split('&') {
                 if let Some(v) = kv.strip_prefix("id=") {
-                    return Some((caps[1].to_string(), percent_decode(v)));
+                    let decoded = percent_decode(v);
+                    let problem = decoded.split('/').next().unwrap_or(&decoded).to_string();
+                    return Some((caps[1].to_string(), problem));
                 }
             }
         }
@@ -499,12 +503,19 @@ mod tests {
 
     #[test]
     fn parses_new_plural_contest_url_with_id_query() {
+        // Only the first path segment of the decoded id is the actual problem
+        // id the submit API accepts — the trailing date/tag is routing metadata.
         assert_eq!(
             parse_url("https://new.contest.yandex.ru/contests/90041/problems?id=7847119%2F2026_02_09%2FJRsW2izyhj"),
-            Some((
-                "90041".to_string(),
-                "7847119/2026_02_09/JRsW2izyhj".to_string(),
-            )),
+            Some(("90041".to_string(), "7847119".to_string())),
+        );
+    }
+
+    #[test]
+    fn parses_new_plural_contest_url_with_simple_id() {
+        assert_eq!(
+            parse_url("https://new.contest.yandex.ru/contests/42/problems?id=B"),
+            Some(("42".to_string(), "B".to_string())),
         );
     }
 
