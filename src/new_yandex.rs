@@ -85,52 +85,46 @@ impl NewYandexClient {
         Ok(())
     }
 
-    /// Fetch the contest's compiler list. Endpoint URL is a guess based on the
-    /// observed /api/action/contest/{id}/{thing} pattern in the HAR — if it 404s
-    /// we report an actionable error so the user can grab a HAR that includes
-    /// the compiler dropdown.
-    fn fetch_compilers(&mut self, contest_id: &str) -> Result<Vec<(String, String)>, String> {
-        let path = format!("/api/action/contest/{}/compilers", contest_id);
-        let body = self.http.get_text(&path)?;
-        let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
-            format!(
-                "Failed to parse compilers JSON at {}: {}. Body first 200 chars: {}",
-                path,
-                e,
-                &body[..body.len().min(200)]
-            )
-        })?;
-        let arr = json
-            .get("compilers")
-            .and_then(|v| v.as_array())
-            .or_else(|| json.as_array())
-            .ok_or_else(|| {
-                format!(
-                    "No compilers array at {}. Response first 300 chars: {}",
-                    path,
-                    &body[..body.len().min(300)]
-                )
-            })?;
-        let out: Vec<(String, String)> = arr
-            .iter()
-            .filter_map(|c| {
-                let id = c.get("id").and_then(|v| v.as_str())?;
-                let name = c
-                    .get("name")
-                    .or_else(|| c.get("title"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or(id);
-                Some((id.to_string(), name.to_string()))
-            })
-            .collect();
-        if out.is_empty() {
-            return Err(format!(
-                "Empty compiler list from {}. Body: {}",
-                path,
-                &body[..body.len().min(300)]
-            ));
+    /// Fetch the contest's compiler list by GETting the problem page HTML and
+    /// extracting `__NEXT_DATA__`. Same pattern coderun uses. The compiler list
+    /// lives at props.pageProps.store.<random-hash>, so we find it by shape
+    /// (any list whose items have `compilerId` and `compilerName`).
+    fn fetch_compilers(
+        &mut self,
+        contest_id: &str,
+        problem_id: &str,
+    ) -> Result<Vec<(String, String)>, String> {
+        let encoded_id = problem_id.replace('/', "%2F");
+        let path = format!("/contests/{}/problems?id={}", contest_id, encoded_id);
+        let html = self.http.get_text(&path)?;
+        let nd = extract_next_data(&html)?;
+        let store = nd
+            .pointer("/props/pageProps/store")
+            .and_then(|v| v.as_object())
+            .ok_or("no props.pageProps.store in __NEXT_DATA__")?;
+        for v in store.values() {
+            let Some(arr) = v.as_array() else { continue };
+            let looks_like_compiler_list = arr
+                .first()
+                .map(|e| e.get("compilerId").is_some() && e.get("compilerName").is_some())
+                .unwrap_or(false);
+            if !looks_like_compiler_list {
+                continue;
+            }
+            let out: Vec<(String, String)> = arr
+                .iter()
+                .filter_map(|c| {
+                    Some((
+                        c.get("compilerId").and_then(|v| v.as_str())?.to_string(),
+                        c.get("compilerName").and_then(|v| v.as_str())?.to_string(),
+                    ))
+                })
+                .collect();
+            if !out.is_empty() {
+                return Ok(out);
+            }
         }
-        Ok(out)
+        Err("Compiler list not found in __NEXT_DATA__ store".to_string())
     }
 
     pub fn submit(
@@ -140,7 +134,7 @@ impl NewYandexClient {
         language: &str,
         source: &str,
     ) -> Result<String, String> {
-        let compilers = self.fetch_compilers(contest_id)?;
+        let compilers = self.fetch_compilers(contest_id, problem_id)?;
         let (compiler_id, compiler_name) = pick_compiler(&compilers, language)?;
         println!("Language: {}", compiler_name);
 
@@ -267,6 +261,25 @@ pub fn parse_url(url: &str) -> Option<(String, String)> {
     let problem_id = query
         .and_then(|q| q.split('&').find_map(|kv| kv.strip_prefix("id=").map(percent_decode)))?;
     Some((contest_id, problem_id))
+}
+
+/// Extract the JSON body of Next.js's `__NEXT_DATA__` script tag from the
+/// problem page HTML. Same shape coderun scrapes.
+fn extract_next_data(html: &str) -> Result<serde_json::Value, String> {
+    let needle = "id=\"__NEXT_DATA__\"";
+    let start = html
+        .find(needle)
+        .ok_or("__NEXT_DATA__ script tag not found in page")?;
+    let after = &html[start..];
+    let open = after
+        .find('>')
+        .ok_or("Malformed __NEXT_DATA__ tag (no `>`)")? + 1;
+    let rest = &after[open..];
+    let end = rest
+        .find("</script>")
+        .ok_or("Unterminated __NEXT_DATA__ payload")?;
+    serde_json::from_str(&rest[..end])
+        .map_err(|e| format!("Failed to parse __NEXT_DATA__ JSON: {}", e))
 }
 
 fn percent_decode(s: &str) -> String {
@@ -500,6 +513,24 @@ mod tests {
     fn pick_compiler_no_match_errors() {
         let cs = opts(&[("rust154", "Rust 1.80.1")]);
         assert!(pick_compiler(&cs, "haskell").is_err());
+    }
+
+    #[test]
+    fn extract_next_data_parses_embedded_json() {
+        let html = r#"<html><head></head><body>
+            <script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"store":{"abc":[{"compilerId":"rust154","compilerName":"Rust 1.80.1"}]}}}}</script>
+            </body></html>"#;
+        let nd = extract_next_data(html).unwrap();
+        let arr = nd
+            .pointer("/props/pageProps/store/abc")
+            .and_then(|v| v.as_array())
+            .unwrap();
+        assert_eq!(arr[0]["compilerId"], "rust154");
+    }
+
+    #[test]
+    fn extract_next_data_missing_tag_errors() {
+        assert!(extract_next_data("<html></html>").is_err());
     }
 
     #[test]
