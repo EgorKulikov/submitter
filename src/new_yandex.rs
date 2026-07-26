@@ -85,46 +85,23 @@ impl NewYandexClient {
         Ok(())
     }
 
-    /// Fetch the contest's compiler list by GETting the problem page HTML and
-    /// extracting `__NEXT_DATA__`. Same pattern coderun uses. The compiler list
-    /// lives at props.pageProps.store.<random-hash>, so we find it by shape
-    /// (any list whose items have `compilerId` and `compilerName`).
-    fn fetch_compilers(
+    /// GET the problem page HTML and pull out both:
+    ///  - the CSRF token from `<meta name="secretkey" content="...">`, used
+    ///    as the `x-csrf-token` header on the submit POST.
+    ///  - the compiler list from `__NEXT_DATA__` `props.pageProps.store.<hash>`,
+    ///    found by shape (a list whose items have `compilerId` + `compilerName`).
+    fn fetch_page_context(
         &mut self,
         contest_id: &str,
         problem_id: &str,
-    ) -> Result<Vec<(String, String)>, String> {
+    ) -> Result<(String, Vec<(String, String)>), String> {
         let encoded_id = problem_id.replace('/', "%2F");
         let path = format!("/contests/{}/problems?id={}", contest_id, encoded_id);
         let html = self.http.get_text(&path)?;
-        let nd = extract_next_data(&html)?;
-        let store = nd
-            .pointer("/props/pageProps/store")
-            .and_then(|v| v.as_object())
-            .ok_or("no props.pageProps.store in __NEXT_DATA__")?;
-        for v in store.values() {
-            let Some(arr) = v.as_array() else { continue };
-            let looks_like_compiler_list = arr
-                .first()
-                .map(|e| e.get("compilerId").is_some() && e.get("compilerName").is_some())
-                .unwrap_or(false);
-            if !looks_like_compiler_list {
-                continue;
-            }
-            let out: Vec<(String, String)> = arr
-                .iter()
-                .filter_map(|c| {
-                    Some((
-                        c.get("compilerId").and_then(|v| v.as_str())?.to_string(),
-                        c.get("compilerName").and_then(|v| v.as_str())?.to_string(),
-                    ))
-                })
-                .collect();
-            if !out.is_empty() {
-                return Ok(out);
-            }
-        }
-        Err("Compiler list not found in __NEXT_DATA__ store".to_string())
+        let csrf = extract_secretkey(&html)
+            .ok_or("CSRF token (meta[name=secretkey]) not found on problem page")?;
+        let compilers = extract_compilers(&html)?;
+        Ok((csrf, compilers))
     }
 
     pub fn submit(
@@ -134,12 +111,12 @@ impl NewYandexClient {
         language: &str,
         source: &str,
     ) -> Result<String, String> {
-        let compilers = self.fetch_compilers(contest_id, problem_id)?;
+        let (csrf, compilers) = self.fetch_page_context(contest_id, problem_id)?;
         let (compiler_id, compiler_name) = pick_compiler(&compilers, language)?;
         println!("Language: {}", compiler_name);
 
-        // The browser always sends Origin + a problem-page Referer on POSTs.
-        // Yandex 403s the submit without them.
+        // Match the browser's POST headers: Origin, problem-page Referer, and
+        // the CSRF token that was embedded in the same problem-page HTML.
         let encoded_problem = problem_id.replace('/', "%2F");
         self.http.set_header("Origin", BASE_URL);
         self.http.set_header(
@@ -149,6 +126,7 @@ impl NewYandexClient {
                 BASE_URL, contest_id, encoded_problem
             ),
         );
+        self.http.set_header("x-csrf-token", &csrf);
 
         let form = multipart::Form::new()
             .text("contestId", contest_id.to_string())
@@ -273,6 +251,50 @@ pub fn parse_url(url: &str) -> Option<(String, String)> {
     let problem_id = query
         .and_then(|q| q.split('&').find_map(|kv| kv.strip_prefix("id=").map(percent_decode)))?;
     Some((contest_id, problem_id))
+}
+
+/// Pull the CSRF token out of `<meta name="secretkey" content="...">`.
+/// The site sends this same value back as the `x-csrf-token` header on POSTs.
+fn extract_secretkey(html: &str) -> Option<String> {
+    let re = regex::Regex::new(
+        r#"(?is)<meta[^>]*name="secretkey"[^>]*content="([^"]+)""#,
+    )
+    .ok()?;
+    re.captures(html).map(|c| c[1].to_string())
+}
+
+/// Find the compiler list inside `__NEXT_DATA__`'s `props.pageProps.store`.
+/// The store key is a random hash per session, so we identify the list by
+/// shape (its items have `compilerId` + `compilerName`).
+fn extract_compilers(html: &str) -> Result<Vec<(String, String)>, String> {
+    let nd = extract_next_data(html)?;
+    let store = nd
+        .pointer("/props/pageProps/store")
+        .and_then(|v| v.as_object())
+        .ok_or("no props.pageProps.store in __NEXT_DATA__")?;
+    for v in store.values() {
+        let Some(arr) = v.as_array() else { continue };
+        let looks_like_compiler_list = arr
+            .first()
+            .map(|e| e.get("compilerId").is_some() && e.get("compilerName").is_some())
+            .unwrap_or(false);
+        if !looks_like_compiler_list {
+            continue;
+        }
+        let out: Vec<(String, String)> = arr
+            .iter()
+            .filter_map(|c| {
+                Some((
+                    c.get("compilerId").and_then(|v| v.as_str())?.to_string(),
+                    c.get("compilerName").and_then(|v| v.as_str())?.to_string(),
+                ))
+            })
+            .collect();
+        if !out.is_empty() {
+            return Ok(out);
+        }
+    }
+    Err("Compiler list not found in __NEXT_DATA__ store".to_string())
 }
 
 /// Extract the JSON body of Next.js's `__NEXT_DATA__` script tag from the
@@ -525,6 +547,32 @@ mod tests {
     fn pick_compiler_no_match_errors() {
         let cs = opts(&[("rust154", "Rust 1.80.1")]);
         assert!(pick_compiler(&cs, "haskell").is_err());
+    }
+
+    #[test]
+    fn extract_secretkey_matches_meta_tag() {
+        let html = r#"<html><head><meta name="secretkey" content="uabcdef1234"/></head></html>"#;
+        assert_eq!(extract_secretkey(html).as_deref(), Some("uabcdef1234"));
+    }
+
+    #[test]
+    fn extract_secretkey_missing_returns_none() {
+        assert_eq!(extract_secretkey("<html></html>"), None);
+    }
+
+    #[test]
+    fn extract_compilers_finds_list_by_shape() {
+        let html = r#"<html><body>
+            <script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"store":{
+                "abc": "not a list",
+                "def": [{"unrelated": 1}],
+                "ghi": [{"compilerId": "rust154", "compilerName": "Rust 1.80.1"},
+                        {"compilerId": "gcc14_cpp23", "compilerName": "C++23 (GCC 14.1)"}]
+            }}}}</script></body></html>"#;
+        let out = extract_compilers(html).unwrap();
+        assert_eq!(out.len(), 2);
+        assert!(out.iter().any(|(id, _)| id == "rust154"));
+        assert!(out.iter().any(|(id, _)| id == "gcc14_cpp23"));
     }
 
     #[test]
