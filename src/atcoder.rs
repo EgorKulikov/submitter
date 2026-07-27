@@ -132,20 +132,24 @@ impl AtcoderClient {
             .map_err(|e| format!("GET submit page failed: {}", e))?;
 
         let csrf = parse_csrf(&page).ok_or_else(|| {
+            let dump = dump_page_for_debug(&page, "no-csrf");
             format!(
-                "CSRF token not found on submit page (len={}, starts: {:?})",
+                "CSRF token not found on submit page (len={}, starts: {:?}, {})",
                 page.len(),
-                page.chars().take(200).collect::<String>()
+                page.chars().take(200).collect::<String>(),
+                dump,
             )
         })?;
 
         let options = parse_language_options(&page);
         if options.is_empty() {
             let has_select = page.contains("data.LanguageId");
+            let dump = dump_page_for_debug(&page, "no-options");
             return Err(format!(
-                "no language options found on submit page (len={}, csrf_ok, mentions_LanguageId={})",
+                "no language options found on submit page (len={}, csrf_ok, mentions_LanguageId={}, {})",
                 page.len(),
                 has_select,
+                dump,
             ));
         }
         let lang_id = crate::langmatch::pick_option("atcoder", language, &options)
@@ -272,6 +276,17 @@ impl AtcoderClient {
 
             thread::sleep(Duration::from_secs(2));
         }
+    }
+}
+
+/// Write the response body to a debug file when direct-submit fails to parse
+/// the submit page. Returns a short human-readable status suitable for
+/// splicing into the error message.
+fn dump_page_for_debug(body: &str, tag: &str) -> String {
+    let path = std::env::temp_dir().join(format!("submitter-atcoder-{}.html", tag));
+    match std::fs::write(&path, body) {
+        Ok(()) => format!("saved to {}", path.display()),
+        Err(e) => format!("save failed: {}", e),
     }
 }
 
