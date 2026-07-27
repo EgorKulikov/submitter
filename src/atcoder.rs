@@ -131,12 +131,22 @@ impl AtcoderClient {
         let page = self.http.get_text(&submit_path)
             .map_err(|e| format!("GET submit page failed: {}", e))?;
 
-        let csrf = parse_csrf(&page)
-            .ok_or_else(|| "CSRF token not found on submit page".to_string())?;
+        let csrf = parse_csrf(&page).ok_or_else(|| {
+            format!(
+                "CSRF token not found on submit page (len={}, starts: {:?})",
+                page.len(),
+                page.chars().take(200).collect::<String>()
+            )
+        })?;
 
         let options = parse_language_options(&page);
         if options.is_empty() {
-            return Err("no language options found on submit page".to_string());
+            let has_select = page.contains("data.LanguageId");
+            return Err(format!(
+                "no language options found on submit page (len={}, csrf_ok, mentions_LanguageId={})",
+                page.len(),
+                has_select,
+            ));
         }
         let lang_id = crate::langmatch::pick_option("atcoder", language, &options)
             .ok_or_else(|| format!("no matching language for {:?}", language))?;
