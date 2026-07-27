@@ -131,28 +131,12 @@ impl AtcoderClient {
         let page = self.http.get_text(&submit_path)
             .map_err(|e| format!("GET submit page failed: {}", e))?;
 
-        let csrf = parse_csrf(&page).ok_or_else(|| {
-            let dump = dump_page_for_debug(&page, "no-csrf");
-            format!(
-                "CSRF token not found on submit page (len={}, starts: {:?}, {})",
-                page.len(),
-                page.chars().take(200).collect::<String>(),
-                dump,
-            )
-        })?;
+        let csrf = parse_csrf(&page)
+            .ok_or_else(|| "CSRF token not found on submit page".to_string())?;
 
         let options = parse_language_options(&page, task_id);
         if options.is_empty() {
-            let has_select = page.contains("data.LanguageId");
-            let has_task_div = page.contains(&format!("select-lang-{}", task_id));
-            let dump = dump_page_for_debug(&page, "no-options");
-            return Err(format!(
-                "no language options found on submit page (len={}, csrf_ok, mentions_LanguageId={}, has_task_div={}, {})",
-                page.len(),
-                has_select,
-                has_task_div,
-                dump,
-            ));
+            return Err("no language options found on submit page".to_string());
         }
         let lang_id = crate::langmatch::pick_option("atcoder", language, &options)
             .ok_or_else(|| format!("no matching language for {:?}", language))?;
@@ -278,17 +262,6 @@ impl AtcoderClient {
 
             thread::sleep(Duration::from_secs(2));
         }
-    }
-}
-
-/// Write the response body to a debug file when direct-submit fails to parse
-/// the submit page. Returns a short human-readable status suitable for
-/// splicing into the error message.
-fn dump_page_for_debug(body: &str, tag: &str) -> String {
-    let path = std::env::temp_dir().join(format!("submitter-atcoder-{}.html", tag));
-    match std::fs::write(&path, body) {
-        Ok(()) => format!("saved to {}", path.display()),
-        Err(e) => format!("save failed: {}", e),
     }
 }
 
