@@ -8,6 +8,7 @@ use std::thread;
 use std::time::Duration;
 
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
+const BASE_URL: &str = "https://www.luogu.com.cn";
 
 struct LuoguClient {
     http: HttpClient,
@@ -17,9 +18,26 @@ struct LuoguClient {
 
 impl LuoguClient {
     fn new() -> Self {
-        let http = HttpClient::new("https://www.luogu.com.cn");
-        let client_id = http.get_cookie("luogu_client_id").unwrap_or_default();
-        let uid = http.get_cookie("luogu_uid").unwrap_or_default();
+        let mut http = HttpClient::new(BASE_URL);
+        http.set_header("User-Agent", USER_AGENT);
+        // Migrate legacy cookie storage keys forward to Luogu's actual cookie
+        // names so self.http can inject them automatically for real requests.
+        let client_id = http
+            .get_cookie("__client_id")
+            .or_else(|| {
+                let v = http.get_cookie("luogu_client_id")?;
+                http.set_cookie("__client_id", &v);
+                Some(v)
+            })
+            .unwrap_or_default();
+        let uid = http
+            .get_cookie("_uid")
+            .or_else(|| {
+                let v = http.get_cookie("luogu_uid")?;
+                http.set_cookie("_uid", &v);
+                Some(v)
+            })
+            .unwrap_or_default();
         let cookies = if !client_id.is_empty() && !uid.is_empty() {
             format!("__client_id={}; _uid={}", client_id, uid)
         } else {
@@ -104,8 +122,8 @@ impl LuoguClient {
         self.uid = uid.clone();
 
         if self.is_logged_in() {
-            self.http.set_cookie("luogu_client_id", &client_id);
-            self.http.set_cookie("luogu_uid", &uid);
+            self.http.set_cookie("__client_id", &client_id);
+            self.http.set_cookie("_uid", &uid);
             println!("Login successful");
             Ok(())
         } else {
@@ -113,6 +131,73 @@ impl LuoguClient {
             self.uid.clear();
             Err("Login failed: invalid cookies".to_string())
         }
+    }
+
+    /// Attempt to submit directly via Luogu's `POST /fe/api/problem/submit/{pid}`
+    /// endpoint. Any failure (missing CSRF, unknown language, 403 CF challenge,
+    /// non-2xx response) returns `Err` and the caller falls back to the browser
+    /// flow. Success returns the new submission's record id (`rid`).
+    fn try_direct_submit(
+        &mut self,
+        pid: &str,
+        contest_id: Option<&str>,
+        language: &str,
+        source: &str,
+    ) -> Result<i64, String> {
+        let problem_path = match contest_id {
+            Some(cid) => format!("/problem/{}?contestId={}", pid, cid),
+            None => format!("/problem/{}", pid),
+        };
+        let page = self
+            .http
+            .get_text(&problem_path)
+            .map_err(|e| format!("GET problem page failed: {}", e))?;
+
+        let csrf = parse_csrf(&page).ok_or_else(|| {
+            let dump = dump_page_for_debug(&page, "editor-no-csrf");
+            format!("CSRF token not found on problem page ({})", dump)
+        })?;
+
+        let lang_id = pick_luogu_language(&page, language).ok_or_else(|| {
+            let dump = dump_page_for_debug(&page, "editor-no-lang");
+            format!("no matching language for {:?} ({})", language, dump)
+        })?;
+
+        let submit_path = match contest_id {
+            Some(cid) => format!("/fe/api/problem/submit/{}?contestId={}", pid, cid),
+            None => format!("/fe/api/problem/submit/{}", pid),
+        };
+        let body = serde_json::json!({
+            "lang": lang_id,
+            "code": source,
+            "enableO2": 1,
+        })
+        .to_string();
+
+        self.http.set_header("Origin", BASE_URL);
+        self.http
+            .set_header("Referer", &format!("{}{}", BASE_URL, problem_path));
+        self.http.set_header("x-csrf-token", &csrf);
+        self.http.set_header("x-requested-with", "XMLHttpRequest");
+
+        let resp = self.http.post_json(&submit_path, &body)?;
+        let status = resp.status();
+        let resp_body = resp
+            .text()
+            .map_err(|e| format!("Failed to read submit response: {}", e))?;
+
+        if !status.is_success() {
+            let dump = dump_page_for_debug(&resp_body, "submit-fail");
+            return Err(format!("submit POST {} ({})", status, dump));
+        }
+
+        let json: serde_json::Value = serde_json::from_str(&resp_body).map_err(|e| {
+            let dump = dump_page_for_debug(&resp_body, "submit-nonjson");
+            format!("Failed to parse submit response: {} ({})", e, dump)
+        })?;
+        json.get("rid")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| format!("No rid in submit response: {}", resp_body))
     }
 
     fn get_records(&self, pid: &str) -> Result<Vec<serde_json::Value>, String> {
@@ -325,11 +410,165 @@ fn first_fail_status(cases: &serde_json::Map<String, serde_json::Value>) -> Opti
     None
 }
 
-/// Parse Luogu URL
-/// https://www.luogu.com.cn/problem/P1001 -> "P1001"
-fn parse_problem_id(url: &str) -> Option<String> {
+/// Parse Luogu URL into (problem_id, optional contest_id).
+/// https://www.luogu.com.cn/problem/P1001 -> ("P1001", None)
+/// https://www.luogu.com.cn/problem/P17157?contestId=338569 -> ("P17157", Some("338569"))
+fn parse_problem_id(url: &str) -> Option<(String, Option<String>)> {
     let re = Regex::new(r"/problem/([A-Za-z0-9]+)").ok()?;
-    re.captures(url).map(|c| c[1].to_string())
+    let pid = re.captures(url).map(|c| c[1].to_string())?;
+    let contest_id = url.split('?').nth(1).and_then(|q| {
+        q.split('&').find_map(|kv| {
+            kv.strip_prefix("contestId=").map(|s| s.to_string())
+        })
+    });
+    Some((pid, contest_id))
+}
+
+/// Extract Luogu's CSRF token from a page's `<meta name="csrf-token" content="...">`.
+fn parse_csrf(html: &str) -> Option<String> {
+    let re = Regex::new(
+        r#"(?is)<meta[^>]*name="csrf-token"[^>]*content="([^"]+)""#,
+    )
+    .ok()?;
+    re.captures(html).map(|c| c[1].to_string())
+}
+
+/// Pick a Luogu language id from the user's language string.
+///
+/// Luogu's compiler IDs are integers. We attempt to pull the current
+/// (pid, name) list from the problem page's `_feInjection` blob, matching
+/// via `langmatch::pick_option`. If that fails we fall back to a small
+/// hardcoded map of the most common languages — good enough for the happy
+/// path; anything unmatched returns None and the caller falls back to the
+/// browser flow.
+fn pick_luogu_language(page: &str, language: &str) -> Option<String> {
+    if let Some(options) = extract_luogu_languages(page) {
+        if let Some(id) = crate::langmatch::pick_option("luogu", language, &options) {
+            return Some(id);
+        }
+    }
+    hardcoded_luogu_lang(language)
+}
+
+/// Walk Luogu's `_feInjection` JSON blob for something that looks like a
+/// language list — an array of `{id, name}` or a map of `{id: name}`.
+fn extract_luogu_languages(html: &str) -> Option<Vec<(String, String)>> {
+    let re = Regex::new(
+        r#"(?is)JSON\.parse\(decodeURIComponent\("([^"]+)"\)\)"#,
+    )
+    .ok()?;
+    let caps = re.captures(html)?;
+    let encoded = &caps[1];
+    let decoded = urldecode(encoded);
+    let json: serde_json::Value = serde_json::from_str(&decoded).ok()?;
+
+    let mut best: Option<Vec<(String, String)>> = None;
+    walk_for_lang_list(&json, &mut best);
+    best
+}
+
+fn walk_for_lang_list(v: &serde_json::Value, best: &mut Option<Vec<(String, String)>>) {
+    match v {
+        serde_json::Value::Object(o) => {
+            // Object shape: {"1": "Pascal", "2": "C", ...} — string values keyed by numeric id.
+            let looks_like_lang_map = o.len() >= 3
+                && o.keys().all(|k| k.parse::<u32>().is_ok())
+                && o.values().all(|v| v.is_string());
+            if looks_like_lang_map {
+                let candidate: Vec<(String, String)> = o
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.as_str().unwrap().to_string()))
+                    .collect();
+                if best.as_ref().map_or(true, |b| candidate.len() > b.len()) {
+                    *best = Some(candidate);
+                }
+                return;
+            }
+            for value in o.values() {
+                walk_for_lang_list(value, best);
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            // Array shape: [{"id": 15, "name": "Rust"}, ...]
+            let looks_like_lang_arr = arr.len() >= 3
+                && arr.iter().all(|e| {
+                    e.get("id").and_then(|v| v.as_i64()).is_some()
+                        && (e.get("name").or_else(|| e.get("title")))
+                            .and_then(|v| v.as_str())
+                            .is_some()
+                });
+            if looks_like_lang_arr {
+                let candidate: Vec<(String, String)> = arr
+                    .iter()
+                    .map(|e| {
+                        let id = e.get("id").and_then(|v| v.as_i64()).unwrap();
+                        let name = e
+                            .get("name")
+                            .or_else(|| e.get("title"))
+                            .and_then(|v| v.as_str())
+                            .unwrap();
+                        (id.to_string(), name.to_string())
+                    })
+                    .collect();
+                if best.as_ref().map_or(true, |b| candidate.len() > b.len()) {
+                    *best = Some(candidate);
+                }
+                return;
+            }
+            for e in arr {
+                walk_for_lang_list(e, best);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn urldecode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(h), Some(l)) = (
+                (bytes[i + 1] as char).to_digit(16),
+                (bytes[i + 2] as char).to_digit(16),
+            ) {
+                out.push((h * 16 + l) as u8);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Minimal fallback when the page-scraped language list can't be found or
+/// doesn't match. Covers the most common cases; anything else → None and
+/// browser fallback.
+fn hardcoded_luogu_lang(language: &str) -> Option<String> {
+    let l = language.to_lowercase();
+    let id = match l.as_str() {
+        "rust" | "rust2021" | "rust2024" => 15,
+        "cpp" | "c++" | "g++" | "c++20" => 12, // C++20 O2
+        "c++17" => 11,
+        "c++14" => 10,
+        "python" | "python3" | "cpython" => 7,
+        "pypy" | "pypy3" => 25,
+        _ => return None,
+    };
+    Some(id.to_string())
+}
+
+/// Dump body to a well-known temp file so failure diagnostics point at
+/// something concrete on the user's disk.
+fn dump_page_for_debug(body: &str, tag: &str) -> String {
+    let path = std::env::temp_dir().join(format!("submitter-luogu-{}.html", tag));
+    match std::fs::write(&path, body) {
+        Ok(()) => format!("saved to {}", path.display()),
+        Err(e) => format!("save failed: {}", e),
+    }
 }
 
 pub fn login() {
@@ -347,7 +586,7 @@ pub fn submit(url: String, language: String, source: String) {
         return;
     }
 
-    let pid = match parse_problem_id(&url) {
+    let (pid, contest_id) = match parse_problem_id(&url) {
         Some(p) => p,
         None => {
             eprintln!("Could not parse URL: {}", url);
@@ -355,7 +594,8 @@ pub fn submit(url: String, language: String, source: String) {
         }
     };
 
-    // Record existing submissions
+    // Record existing submissions — used by poll_verdict to detect the new one
+    // whether it came from direct-submit or from the browser fallback.
     let mut known_ids = std::collections::HashSet::new();
     if let Ok(records) = client.get_records(&pid) {
         for r in &records {
@@ -365,7 +605,21 @@ pub fn submit(url: String, language: String, source: String) {
         }
     }
 
-    // Copy source to clipboard and open submit page
+    // Try direct HTTPS POST first. Any failure = fall back to browser.
+    println!("Submitting...");
+    match client.try_direct_submit(&pid, contest_id.as_deref(), &language, &source) {
+        Ok(_rid) => {
+            if let Err(e) = client.poll_verdict(&pid, &known_ids, || {}) {
+                eprintln!("Verdict polling failed: {}", e);
+            }
+            return;
+        }
+        Err(reason) => {
+            eprintln!("Direct submission failed ({}), opening browser instead.", reason);
+        }
+    }
+
+    // Fallback: existing browser handoff flow.
     let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
     ctx.set_contents(source.clone()).unwrap();
 
@@ -386,12 +640,70 @@ pub fn submit(url: String, language: String, source: String) {
     };
     open::that_detached(&url_to_open).ok();
 
-    // Poll for new submission
     if let Err(e) = client.poll_verdict(&pid, &known_ids, || {
         if let Some(h) = handoff.as_ref() {
             h.signal_close();
         }
     }) {
         eprintln!("Verdict polling failed: {}", e);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_problem_id_bare_problem() {
+        assert_eq!(
+            parse_problem_id("https://www.luogu.com.cn/problem/P1001"),
+            Some(("P1001".to_string(), None)),
+        );
+    }
+
+    #[test]
+    fn parse_problem_id_contest_url() {
+        assert_eq!(
+            parse_problem_id("https://www.luogu.com.cn/problem/P17157?contestId=338569"),
+            Some(("P17157".to_string(), Some("338569".to_string()))),
+        );
+    }
+
+    #[test]
+    fn parse_csrf_reads_meta_tag() {
+        let html = r#"<meta name="csrf-token" content="1785246296:D8PSizK8ZfyI+52wPm+wC7IxNvOMwxPRapS64lzpQng=">"#;
+        assert_eq!(
+            parse_csrf(html).as_deref(),
+            Some("1785246296:D8PSizK8ZfyI+52wPm+wC7IxNvOMwxPRapS64lzpQng="),
+        );
+    }
+
+    #[test]
+    fn parse_csrf_missing_returns_none() {
+        assert_eq!(parse_csrf("<html></html>"), None);
+    }
+
+    #[test]
+    fn hardcoded_luogu_lang_covers_common_cases() {
+        assert_eq!(hardcoded_luogu_lang("rust").as_deref(), Some("15"));
+        assert_eq!(hardcoded_luogu_lang("cpp").as_deref(), Some("12"));
+        assert_eq!(hardcoded_luogu_lang("C++17").as_deref(), Some("11"));
+        assert_eq!(hardcoded_luogu_lang("python").as_deref(), Some("7"));
+        assert_eq!(hardcoded_luogu_lang("haskell"), None);
+    }
+
+    #[test]
+    fn urldecode_handles_slash_escape() {
+        assert_eq!(urldecode("7847%2F2026"), "7847/2026");
+        assert_eq!(urldecode("plain"), "plain");
+    }
+
+    #[test]
+    fn extract_luogu_languages_walks_map_shape() {
+        let html = r#"<script>var x = JSON.parse(decodeURIComponent("%7B%22currentData%22%3A%7B%22langs%22%3A%7B%221%22%3A%22Pascal%22%2C%2215%22%3A%22Rust%22%2C%2212%22%3A%22C%2B%2B17%22%7D%7D%7D"))</script>"#;
+        let opts = extract_luogu_languages(html).unwrap();
+        assert_eq!(opts.len(), 3);
+        assert!(opts.iter().any(|(id, n)| id == "15" && n == "Rust"));
+        assert!(opts.iter().any(|(id, n)| id == "12" && n == "C++17"));
     }
 }
