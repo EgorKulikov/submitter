@@ -141,14 +141,16 @@ impl AtcoderClient {
             )
         })?;
 
-        let options = parse_language_options(&page);
+        let options = parse_language_options(&page, task_id);
         if options.is_empty() {
             let has_select = page.contains("data.LanguageId");
+            let has_task_div = page.contains(&format!("select-lang-{}", task_id));
             let dump = dump_page_for_debug(&page, "no-options");
             return Err(format!(
-                "no language options found on submit page (len={}, csrf_ok, mentions_LanguageId={}, {})",
+                "no language options found on submit page (len={}, csrf_ok, mentions_LanguageId={}, has_task_div={}, {})",
                 page.len(),
                 has_select,
+                has_task_div,
                 dump,
             ));
         }
@@ -295,19 +297,50 @@ fn parse_csrf(html: &str) -> Option<String> {
     re.captures(html).map(|c| c[1].to_string())
 }
 
-fn parse_language_options(html: &str) -> Vec<(String, String)> {
-    let sel_re = Regex::new(
+fn parse_language_options(html: &str, task_id: &str) -> Vec<(String, String)> {
+    let opt_re =
+        Regex::new(r#"(?is)<option[^>]*value="([^"]+)"[^>]*>(.*?)</option>"#).unwrap();
+
+    // Prefer the JS-attributed select if present (post-hydration DOM captures).
+    let named_sel_re = Regex::new(
         r#"(?is)<select[^>]*name="data\.LanguageId"[^>]*>(.*?)</select>"#,
     )
     .unwrap();
-    let opt_re =
-        Regex::new(r#"(?is)<option[^>]*value="([^"]+)"[^>]*>(.*?)</option>"#).unwrap();
-    let inner = match sel_re.captures(html) {
-        Some(c) => c[1].to_string(),
-        None => return Vec::new(),
+    if let Some(c) = named_sel_re.captures(html) {
+        let opts: Vec<_> = opt_re
+            .captures_iter(&c[1])
+            .map(|c| (c[1].to_string(), c[2].trim().to_string()))
+            .collect();
+        if !opts.is_empty() {
+            return opts;
+        }
+    }
+
+    // Raw server-rendered HTML: per-task <div id="select-lang-<task_id>">
+    // wraps a bare <select> whose name is added by JS at runtime.
+    let div_pat = format!(
+        r#"(?is)<div[^>]*id="select-lang-{}"[^>]*>(.*?)</select>"#,
+        regex::escape(task_id)
+    );
+    let div_re = match Regex::new(&div_pat) {
+        Ok(r) => r,
+        Err(_) => return Vec::new(),
     };
+    let Some(cap) = div_re.captures(html) else {
+        return Vec::new();
+    };
+    // Skip past the <select ...> opening tag inside the captured slice so we
+    // don't accidentally match a leading empty option outside the select.
+    let inner = &cap[1];
+    let Some(select_pos) = inner.to_lowercase().find("<select") else {
+        return Vec::new();
+    };
+    let Some(open_end) = inner[select_pos..].find('>') else {
+        return Vec::new();
+    };
+    let opts_slice = &inner[select_pos + open_end + 1..];
     opt_re
-        .captures_iter(&inner)
+        .captures_iter(opts_slice)
         .map(|c| (c[1].to_string(), c[2].trim().to_string()))
         .collect()
 }
@@ -509,28 +542,58 @@ mod tests {
     }
 
     #[test]
-    fn parse_language_options_extracts_pairs() {
+    fn parse_language_options_extracts_pairs_from_named_select() {
         let html = r#"
           <select name="data.LanguageId" class="form-control">
             <option value="5001">C++ 17 (gcc 9.2.1)</option>
             <option value="5054">Rust (rustc 1.70.0)</option>
           </select>
         "#;
-        let opts = parse_language_options(html);
+        let opts = parse_language_options(html, "abc999_a");
         assert_eq!(opts.len(), 2);
         assert_eq!(opts[0], ("5001".to_string(), "C++ 17 (gcc 9.2.1)".to_string()));
         assert_eq!(opts[1], ("5054".to_string(), "Rust (rustc 1.70.0)".to_string()));
     }
 
     #[test]
-    fn parse_language_options_missing_select_returns_empty() {
-        assert!(parse_language_options("<html></html>").is_empty());
+    fn parse_language_options_falls_back_to_task_specific_div() {
+        // Raw server-rendered HTML: name="data.LanguageId" is JS-added at
+        // runtime; the raw payload only has the per-task wrapping div.
+        let html = r#"
+          <div id="select-lang" class="col-sm-5" data-name="data.LanguageId">
+            <div id="select-lang-abc999_a">
+              <select class="form-control" style="width:300px;">
+                <option></option>
+                <option value="5001">C++ 17</option>
+                <option value="5054">Rust</option>
+              </select>
+            </div>
+            <div id="select-lang-abc999_b">
+              <select class="form-control">
+                <option></option>
+                <option value="9999">DisabledForOtherTask</option>
+              </select>
+            </div>
+          </div>
+        "#;
+        let opts = parse_language_options(html, "abc999_a");
+        // Empty <option></option> is filtered — no `value` attr.
+        assert_eq!(opts.len(), 2);
+        assert_eq!(opts[0].0, "5001");
+        assert_eq!(opts[1].0, "5054");
+        // Task-scoped: the b-task's options must not appear.
+        assert!(opts.iter().all(|(id, _)| id != "9999"));
     }
 
     #[test]
-    fn parse_language_options_empty_select_returns_empty() {
+    fn parse_language_options_missing_everything_returns_empty() {
+        assert!(parse_language_options("<html></html>", "abc999_a").is_empty());
+    }
+
+    #[test]
+    fn parse_language_options_empty_named_select_returns_empty() {
         let html = r#"<select name="data.LanguageId"></select>"#;
-        assert!(parse_language_options(html).is_empty());
+        assert!(parse_language_options(html, "abc999_a").is_empty());
     }
 
     #[test]
