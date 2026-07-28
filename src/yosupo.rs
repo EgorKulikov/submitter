@@ -189,7 +189,7 @@ fn is_terminal(status: &str) -> bool {
     }
 }
 
-fn status_name(s: &str) -> &'static str {
+fn status_name(s: &str) -> &str {
     match s {
         "AC" => "Accepted",
         "WA" => "Wrong Answer",
@@ -199,11 +199,13 @@ fn status_name(s: &str) -> &'static str {
         "CE" => "Compilation Error",
         "IE" => "Internal Error",
         "OLE" => "Output Limit Exceeded",
+        "Fail" => "Fail",
         "WJ" => "Waiting for Judge",
         "Judging" => "Judging",
         "Compiling" => "Compiling",
         "" => "Pending",
-        _ => "Unknown",
+        // Unknown status codes pass through verbatim so we don't hide info.
+        other => other,
     }
 }
 
