@@ -106,10 +106,13 @@ impl YosupoClient {
                 let color = if status == "AC" { Color::Green } else { Color::Red };
                 let mut display = status_name(status).to_string();
                 if status != "AC" && case_count > 0 {
-                    // Point at the first non-AC case for a bit of context.
+                    // Point at the first actually-failing case; skip "-"
+                    // (not-judged-yet, appears when the judge cuts off
+                    // remaining cases after the failing one).
                     if let Some(cases) = json.get("case_results").and_then(|v| v.as_array()) {
                         if let Some(bad) = cases.iter().find(|c| {
-                            c.get("status").and_then(|v| v.as_str()).unwrap_or("") != "AC"
+                            let s = c.get("status").and_then(|v| v.as_str()).unwrap_or("");
+                            s != "AC" && s != "-" && !s.is_empty()
                         }) {
                             if let Some(name) = bad.get("case").and_then(|v| v.as_str()) {
                                 display.push_str(&format!(" on {}", name));
@@ -182,9 +185,11 @@ fn pick_lang(langs: &[(String, String)], language: &str) -> Result<(String, Stri
 }
 
 /// Yosupo's non-terminal statuses. Everything else is terminal.
+/// `-` shows up per-case for tests that haven't been judged yet, and
+/// as the overview status while the submission is still queued.
 fn is_terminal(status: &str) -> bool {
     match status {
-        "" | "WJ" | "Judging" | "Compiling" | "Waiting" => false,
+        "" | "-" | "WJ" | "Judging" | "Compiling" | "Waiting" => false,
         _ => true,
     }
 }
