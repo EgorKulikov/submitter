@@ -13,6 +13,7 @@
     "http://127.0.0.1/*",
     "https://atcoder.jp/contests/*/submit*",
     "https://codeforces.com/contest/*/submit*",
+    "https://codeforces.com/gym/*/submit*",
     "https://codeforces.com/problemset/submit*",
     "https://www.luogu.com.cn/problem/*"
   ],
@@ -21,6 +22,7 @@
       "matches": [
         "https://atcoder.jp/contests/*/submit*",
         "https://codeforces.com/contest/*/submit*",
+        "https://codeforces.com/gym/*/submit*",
         "https://codeforces.com/problemset/submit*",
         "https://www.luogu.com.cn/problem/*"
       ],
@@ -31,6 +33,7 @@
       "matches": [
         "https://atcoder.jp/contests/*/submit*",
         "https://codeforces.com/contest/*/submit*",
+        "https://codeforces.com/gym/*/submit*",
         "https://codeforces.com/problemset/submit*",
         "https://www.luogu.com.cn/problem/*"
       ],
@@ -42,6 +45,7 @@
       "matches": [
         "https://atcoder.jp/contests/*/submit*",
         "https://codeforces.com/contest/*/submit*",
+        "https://codeforces.com/gym/*/submit*",
         "https://codeforces.com/problemset/submit*",
         "https://www.luogu.com.cn/problem/*"
       ],
