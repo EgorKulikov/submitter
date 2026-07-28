@@ -96,10 +96,17 @@ impl YosupoClient {
                 .get("status")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            let case_count = json
-                .get("case_results")
-                .and_then(|v| v.as_array())
-                .map(|a| a.len())
+            let cases_ref = json.get("case_results").and_then(|v| v.as_array());
+            let case_count = cases_ref.map(|a| a.len()).unwrap_or(0);
+            let judged_count = cases_ref
+                .map(|a| {
+                    a.iter()
+                        .filter(|c| {
+                            let s = c.get("status").and_then(|v| v.as_str()).unwrap_or("");
+                            !s.is_empty() && s != "-"
+                        })
+                        .count()
+                })
                 .unwrap_or(0);
 
             if is_terminal(status) {
@@ -132,7 +139,7 @@ impl YosupoClient {
             }
 
             let progress = if case_count > 0 {
-                format!("Judging ({} cases)", case_count)
+                format!("Judging {}/{}", judged_count, case_count)
             } else {
                 status_name(status).to_string()
             };
