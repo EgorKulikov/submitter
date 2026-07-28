@@ -11,7 +11,10 @@ fn site_key_from_url(url: &str) -> Option<String> {
     let domain = url_regex.captures(url)?[1].to_string();
     // CodeRun and the new Contest UI live on Yandex subdomains but are separate
     // sites, so keep the full hostname instead of collapsing to yandex.ru.
-    if domain == "coderun.yandex.ru" || domain == "new.contest.yandex.ru" {
+    if domain == "coderun.yandex.ru"
+        || domain == "new.contest.yandex.ru"
+        || domain == "judge.yosupo.jp"
+    {
         return Some(domain);
     }
     let domain_parts: Vec<&str> = domain.split('.').collect();
