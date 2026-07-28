@@ -194,11 +194,19 @@ fn pick_lang(langs: &[(String, String)], language: &str) -> Result<(String, Stri
 /// Yosupo's non-terminal statuses. Everything else is terminal.
 /// `-` shows up per-case for tests that haven't been judged yet, and
 /// as the overview status while the submission is still queued.
+/// While cases are running, the overview status is a live progress
+/// string like `"4/26"` (judged/total) — treat any `X/Y` as non-terminal.
 fn is_terminal(status: &str) -> bool {
     match status {
-        "" | "-" | "WJ" | "Judging" | "Compiling" | "Waiting" => false,
-        _ => true,
+        "" | "-" | "WJ" | "Judging" | "Compiling" | "Waiting" => return false,
+        _ => {}
     }
+    if let Some((a, b)) = status.split_once('/') {
+        if a.chars().all(|c| c.is_ascii_digit()) && b.chars().all(|c| c.is_ascii_digit()) {
+            return false;
+        }
+    }
+    true
 }
 
 fn status_name(s: &str) -> &str {
@@ -314,7 +322,10 @@ mod tests {
     fn is_terminal_recognizes_lifecycle() {
         assert!(!is_terminal("WJ"));
         assert!(!is_terminal(""));
+        assert!(!is_terminal("-"));
         assert!(!is_terminal("Judging"));
+        assert!(!is_terminal("0/26"), "progress N/N is not terminal");
+        assert!(!is_terminal("24/26"), "progress N/N is not terminal");
         assert!(is_terminal("AC"));
         assert!(is_terminal("WA"));
         assert!(is_terminal("TLE"));
