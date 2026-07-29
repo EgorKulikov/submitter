@@ -88,7 +88,7 @@ fn test_yandex() {
     let mut client = YandexClient::new();
     client.set_refresh_token(&refresh_token);
     assert!(client.try_refresh_token(), "Failed to refresh Yandex token");
-    let (compiler_id, _) = client.find_compiler("C++ 23").unwrap();
+    let (compiler_id, _) = client.find_compiler("C++23").unwrap();
     let run_id = client
         .submit(
             "90118",
