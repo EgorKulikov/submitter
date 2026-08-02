@@ -244,11 +244,44 @@ impl LuoguClient {
         let mut stdout = std::io::stdout();
         let mut last_len = 0;
         let mut tracking_id: Option<i64> = None;
+        let mut empty_polls: u32 = 0;
 
         loop {
             clear(last_len);
             last_len = 0;
             let records = self.get_records(pid)?;
+
+            // If tracking hasn't caught anything yet and we keep getting no
+            // new-to-us records back, escalate after ~30s of silence: dump
+            // one of the record-list responses so we can see whether we're
+            // logged out, whether the format changed, etc.
+            if tracking_id.is_none()
+                && records.iter().all(|r| {
+                    let id = r.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+                    known_ids.contains(&id)
+                })
+            {
+                empty_polls += 1;
+                if empty_polls == 15 {
+                    let body = self
+                        .get_page(&format!(
+                            "https://www.luogu.com.cn/record/list?user={}&pid={}&page=1&_contentOnly=1",
+                            self.uid, pid
+                        ))
+                        .unwrap_or_default();
+                    let dump = dump_page_for_debug(&body, "poll-stalled");
+                    let progress =
+                        format!("Waiting for submission ({} records, none new; {})", records.len(), dump);
+                    let _ = execute!(stdout, SetForegroundColor(Color::Yellow));
+                    print!("{}", progress);
+                    let _ = execute!(stdout, ResetColor);
+                    let _ = std::io::Write::flush(&mut std::io::stdout());
+                    last_len = progress.len();
+                }
+                thread::sleep(Duration::from_secs(2));
+                continue;
+            }
+            empty_polls = 0;
 
             for record in &records {
                 let id = record.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
