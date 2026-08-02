@@ -402,15 +402,23 @@ impl LuoguClient {
         println!("{}", display);
         let _ = execute!(stdout, ResetColor);
 
-        // Nothing more to say on Accepted, or when there's no subtask detail.
+        // Nothing more to say on Accepted, or when there's no detail at all.
         if is_accepted {
             return;
         }
-        let subtasks = detail
-            .and_then(|r| r.pointer("/detail/judgeResult/subtasks"))
+        let Some(record) = detail else { return };
+        let subtasks = record
+            .pointer("/detail/judgeResult/subtasks")
             .and_then(|v| v.as_array());
-        let Some(subtasks) = subtasks else { return };
+        let empty: Vec<serde_json::Value> = Vec::new();
+        let subtasks = subtasks.unwrap_or(&empty);
         if subtasks.is_empty() {
+            // No subtask breakdown to expand — dump the detail JSON so we can
+            // learn where Luogu actually stores per-test results for this
+            // problem shape.
+            let raw = serde_json::to_string_pretty(record).unwrap_or_default();
+            let dump = dump_page_for_debug(&raw, "verdict-no-subtasks");
+            println!("  (no subtask breakdown in record detail; {})", dump);
             return;
         }
 
