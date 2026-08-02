@@ -200,11 +200,26 @@ impl LuoguClient {
             .ok_or_else(|| format!("No rid in submit response: {}", resp_body))
     }
 
-    fn get_records(&self, pid: &str) -> Result<Vec<serde_json::Value>, String> {
-        let url = format!(
+    fn records_list_url(&self, pid: &str, contest_id: Option<&str>) -> String {
+        let mut url = format!(
             "https://www.luogu.com.cn/record/list?user={}&pid={}&page=1&_contentOnly=1",
             self.uid, pid
         );
+        if let Some(cid) = contest_id {
+            // Contest-only problems 403 the plain records-list URL
+            // ("您无权查看该题目" — no permission to view this problem);
+            // scoping to the contest lets us through.
+            url.push_str(&format!("&contestId={}", cid));
+        }
+        url
+    }
+
+    fn get_records(
+        &self,
+        pid: &str,
+        contest_id: Option<&str>,
+    ) -> Result<Vec<serde_json::Value>, String> {
+        let url = self.records_list_url(pid, contest_id);
         let body = self.get_page(&url)?;
         let data: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
             let dump = dump_page_for_debug(&body, "records-list");
@@ -238,6 +253,7 @@ impl LuoguClient {
     fn poll_verdict<F: FnMut()>(
         &self,
         pid: &str,
+        contest_id: Option<&str>,
         known_ids: &std::collections::HashSet<i64>,
         mut on_submission_found: F,
     ) -> Result<(), String> {
@@ -249,7 +265,7 @@ impl LuoguClient {
         loop {
             clear(last_len);
             last_len = 0;
-            let records = self.get_records(pid)?;
+            let records = self.get_records(pid, contest_id)?;
 
             // If tracking hasn't caught anything yet and we keep getting no
             // new-to-us records back, escalate after ~30s of silence: dump
@@ -264,10 +280,7 @@ impl LuoguClient {
                 empty_polls += 1;
                 if empty_polls == 15 {
                     let body = self
-                        .get_page(&format!(
-                            "https://www.luogu.com.cn/record/list?user={}&pid={}&page=1&_contentOnly=1",
-                            self.uid, pid
-                        ))
+                        .get_page(&self.records_list_url(pid, contest_id))
                         .unwrap_or_default();
                     let dump = dump_page_for_debug(&body, "poll-stalled");
                     let progress =
@@ -637,7 +650,7 @@ pub fn submit(url: String, language: String, source: String) {
     // Record existing submissions — used by poll_verdict to detect the new one
     // whether it came from direct-submit or from the browser fallback.
     let mut known_ids = std::collections::HashSet::new();
-    if let Ok(records) = client.get_records(&pid) {
+    if let Ok(records) = client.get_records(&pid, contest_id.as_deref()) {
         for r in &records {
             if let Some(id) = r.get("id").and_then(|v| v.as_i64()) {
                 known_ids.insert(id);
@@ -650,7 +663,7 @@ pub fn submit(url: String, language: String, source: String) {
     match client.try_direct_submit(&pid, contest_id.as_deref(), &language, &source) {
         Ok(rid) => {
             println!("Submission url: https://www.luogu.com.cn/record/{}", rid);
-            if let Err(e) = client.poll_verdict(&pid, &known_ids, || {}) {
+            if let Err(e) = client.poll_verdict(&pid, contest_id.as_deref(), &known_ids, || {}) {
                 eprintln!("Verdict polling failed: {}", e);
             }
             return;
@@ -681,7 +694,7 @@ pub fn submit(url: String, language: String, source: String) {
     };
     open::that_detached(&url_to_open).ok();
 
-    if let Err(e) = client.poll_verdict(&pid, &known_ids, || {
+    if let Err(e) = client.poll_verdict(&pid, contest_id.as_deref(), &known_ids, || {
         if let Some(h) = handoff.as_ref() {
             h.signal_close();
         }
