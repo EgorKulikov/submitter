@@ -407,15 +407,18 @@ impl LuoguClient {
             return;
         }
         let Some(record) = detail else { return };
-        let subtasks = record
-            .pointer("/detail/judgeResult/subtasks")
-            .and_then(|v| v.as_array());
-        let empty: Vec<serde_json::Value> = Vec::new();
-        let subtasks = subtasks.unwrap_or(&empty);
+        // Luogu returns subtasks either as an array or as an object keyed by
+        // numeric string ids. Normalise to a Vec<&Value> in id order.
+        let subtasks: Vec<&serde_json::Value> = match record.pointer("/detail/judgeResult/subtasks") {
+            Some(serde_json::Value::Array(arr)) => arr.iter().collect(),
+            Some(serde_json::Value::Object(map)) => {
+                let mut pairs: Vec<_> = map.iter().collect();
+                pairs.sort_by_key(|(k, _)| k.parse::<i64>().unwrap_or(0));
+                pairs.into_iter().map(|(_, v)| v).collect()
+            }
+            _ => Vec::new(),
+        };
         if subtasks.is_empty() {
-            // No subtask breakdown to expand — dump the detail JSON so we can
-            // learn where Luogu actually stores per-test results for this
-            // problem shape.
             let raw = serde_json::to_string_pretty(record).unwrap_or_default();
             let dump = dump_page_for_debug(&raw, "verdict-no-subtasks");
             println!("  (no subtask breakdown in record detail; {})", dump);
