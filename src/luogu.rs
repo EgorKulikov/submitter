@@ -390,87 +390,69 @@ impl LuoguClient {
         detail: Option<&serde_json::Value>,
     ) {
         let mut stdout = std::io::stdout();
-        let verdict_name = status_name(status);
         let is_accepted = status == 12;
         let color = if is_accepted { Color::Green } else { Color::Red };
-        let mut display = verdict_name.to_string();
 
-        if let Some(record) = detail {
-            let subtasks = record
-                .pointer("/detail/judgeResult/subtasks")
-                .and_then(|v| v.as_array());
-
-            if let Some(subtasks) = subtasks {
-                if subtasks.len() > 1 {
-                    // Multi-subtask: show score and per-subtask breakdown.
-                    if !is_accepted {
-                        display.push_str(&format!(" ({}pts)", score));
-                    }
-                    let _ = execute!(stdout, SetForegroundColor(color));
-                    println!("{}", display);
-                    let _ = execute!(stdout, ResetColor);
-
-                    for s in subtasks {
-                        let sid = s.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
-                        let s_score = s.get("score").and_then(|v| v.as_i64()).unwrap_or(0);
-                        let s_status = s.get("status").and_then(|v| v.as_i64()).unwrap_or(0);
-                        let cases = s.get("testCases").and_then(|v| v.as_object());
-                        let total = cases.map(|c| c.len()).unwrap_or(0);
-                        let s_accepted = s_status == 12;
-                        let line_color = if s_accepted { Color::Green } else { Color::Red };
-
-                        let mut line = format!("  Subtask {}: {}pts", sid + 1, s_score);
-                        if !s_accepted {
-                            if let Some(cases) = cases {
-                                let passed = cases
-                                    .values()
-                                    .filter(|c| {
-                                        c.get("status").and_then(|v| v.as_i64()) == Some(12)
-                                    })
-                                    .count();
-                                if let Some((fail_id, fail_st)) = first_fail_status(cases) {
-                                    line.push_str(&format!(
-                                        " ({} on test {}, {}/{} passed)",
-                                        status_name(fail_st),
-                                        fail_id + 1,
-                                        passed,
-                                        total
-                                    ));
-                                } else {
-                                    line.push_str(&format!(" ({}/{} passed)", passed, total));
-                                }
-                            }
-                        }
-
-                        let _ = execute!(stdout, SetForegroundColor(line_color));
-                        println!("{}", line);
-                        let _ = execute!(stdout, ResetColor);
-                    }
-                    return;
-                } else if subtasks.len() == 1 && !is_accepted {
-                    // Single subtask: annotate with first failing test.
-                    let s = &subtasks[0];
-                    if let Some(cases) = s.get("testCases").and_then(|v| v.as_object()) {
-                        let total = cases.len();
-                        if let Some((fail_id, fail_st)) = first_fail_status(cases) {
-                            display = format!(
-                                "{} on test {}/{}",
-                                status_name(fail_st),
-                                fail_id + 1,
-                                total
-                            );
-                        }
-                        if score > 0 {
-                            display.push_str(&format!(" ({}pts)", score));
-                        }
-                    }
-                }
-            }
+        // Top-level verdict line.
+        let mut display = status_name(status).to_string();
+        if !is_accepted && score > 0 {
+            display.push_str(&format!(" ({}pts)", score));
         }
-
         let _ = execute!(stdout, SetForegroundColor(color));
         println!("{}", display);
         let _ = execute!(stdout, ResetColor);
+
+        // Nothing more to say on Accepted, or when there's no subtask detail.
+        if is_accepted {
+            return;
+        }
+        let subtasks = detail
+            .and_then(|r| r.pointer("/detail/judgeResult/subtasks"))
+            .and_then(|v| v.as_array());
+        let Some(subtasks) = subtasks else { return };
+        if subtasks.is_empty() {
+            return;
+        }
+
+        // Only prefix per-subtask lines if there's more than one; a single
+        // "subtask" is really just the flat test list.
+        let multi = subtasks.len() > 1;
+        for s in subtasks {
+            let sid = s.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+            let s_score = s.get("score").and_then(|v| v.as_i64()).unwrap_or(0);
+            let s_status = s.get("status").and_then(|v| v.as_i64()).unwrap_or(0);
+            let s_accepted = s_status == 12;
+            let s_color = if s_accepted { Color::Green } else { Color::Red };
+            let label = if s_accepted { "Accepted" } else { "Unaccepted" };
+            let line = if multi {
+                format!("  Subtask {}: {} ({}pts)", sid + 1, label, s_score)
+            } else {
+                format!("  {} ({}pts)", label, s_score)
+            };
+            let _ = execute!(stdout, SetForegroundColor(s_color));
+            println!("{}", line);
+            let _ = execute!(stdout, ResetColor);
+
+            if s_accepted {
+                continue;
+            }
+            let Some(cases) = s.get("testCases").and_then(|v| v.as_object()) else {
+                continue;
+            };
+            // Sort by numeric test id so output matches the site's ordering.
+            let mut sorted: Vec<_> = cases.iter().collect();
+            sorted.sort_by_key(|(k, _)| k.parse::<i64>().unwrap_or(0));
+            let indent = if multi { "    " } else { "    " };
+            for (_, case) in sorted {
+                let tid = case.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+                let cs = case.get("status").and_then(|v| v.as_i64()).unwrap_or(0);
+                let is_ac = cs == 12;
+                let c_color = if is_ac { Color::Green } else { Color::Red };
+                let _ = execute!(stdout, SetForegroundColor(c_color));
+                println!("{}Test {}: {}", indent, tid + 1, status_name(cs));
+                let _ = execute!(stdout, ResetColor);
+            }
+        }
     }
 }
 
@@ -494,21 +476,6 @@ fn status_name(status: i64) -> &'static str {
         14 => "Unaccepted",
         _ => "Unknown",
     }
-}
-
-/// Find the first non-accepted test case status in a testCases object
-fn first_fail_status(cases: &serde_json::Map<String, serde_json::Value>) -> Option<(i64, i64)> {
-    // Sort by test id numerically
-    let mut sorted: Vec<_> = cases.iter().collect();
-    sorted.sort_by_key(|(k, _)| k.parse::<i64>().unwrap_or(0));
-    for (_, c) in &sorted {
-        let st = c.get("status").and_then(|v| v.as_i64()).unwrap_or(0);
-        if st != 12 && st != 0 && st != 11 {
-            let id = c.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
-            return Some((id, st));
-        }
-    }
-    None
 }
 
 /// Parse Luogu URL into (problem_id, optional contest_id).
