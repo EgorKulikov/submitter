@@ -201,17 +201,20 @@ impl LuoguClient {
     }
 
     fn records_list_url(&self, pid: &str, contest_id: Option<&str>) -> String {
-        let mut url = format!(
-            "https://www.luogu.com.cn/record/list?user={}&pid={}&page=1&_contentOnly=1",
-            self.uid, pid
-        );
-        if let Some(cid) = contest_id {
-            // Contest-only problems 403 the plain records-list URL
-            // ("您无权查看该题目" — no permission to view this problem);
-            // scoping to the contest lets us through.
-            url.push_str(&format!("&contestId={}", cid));
+        // Contest-only problems 403 `?user=X&pid=Y` ("您无权查看该题目").
+        // Scoping by contest instead (without pid) is allowed because it's
+        // your own participation data. When we do that we filter client-
+        // side to matching pid in get_records.
+        match contest_id {
+            Some(cid) => format!(
+                "https://www.luogu.com.cn/record/list?user={}&contestId={}&page=1&_contentOnly=1",
+                self.uid, cid
+            ),
+            None => format!(
+                "https://www.luogu.com.cn/record/list?user={}&pid={}&page=1&_contentOnly=1",
+                self.uid, pid
+            ),
         }
-        url
     }
 
     fn get_records(
@@ -225,11 +228,23 @@ impl LuoguClient {
             let dump = dump_page_for_debug(&body, "records-list");
             format!("Failed to parse records JSON: {} ({})", e, dump)
         })?;
-        Ok(data
+        let all = data
             .pointer("/currentData/records/result")
             .and_then(|v| v.as_array())
             .cloned()
-            .unwrap_or_default())
+            .unwrap_or_default();
+        // Contest-scoped URL returns records for every problem in the contest;
+        // narrow to this pid so poll_verdict tracks the right one.
+        if contest_id.is_some() {
+            Ok(all
+                .into_iter()
+                .filter(|r| {
+                    r.pointer("/problem/pid").and_then(|v| v.as_str()) == Some(pid)
+                })
+                .collect())
+        } else {
+            Ok(all)
+        }
     }
 
     fn get_record_detail(&self, record_id: &str) -> Result<serde_json::Value, String> {
