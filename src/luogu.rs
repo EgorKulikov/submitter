@@ -314,115 +314,17 @@ impl LuoguClient {
                 }
 
                 if status == 0 || status == 1 {
-                    // Waiting/Judging
-                    let progress = if status == 1 {
-                        "Judging".to_string()
-                    } else {
-                        "Waiting".to_string()
-                    };
+                    let progress = progress_label(status);
                     let _ = execute!(stdout, SetForegroundColor(Color::Yellow));
                     print!("{}", progress);
                     let _ = execute!(stdout, ResetColor);
+                    let _ = std::io::Write::flush(&mut std::io::stdout());
                     last_len = progress.len();
                 } else {
-                    // Final verdict
-                    let verdict_name = status_name(status);
-                    let is_accepted = status == 12;
-                    let color = if is_accepted {
-                        Color::Green
-                    } else {
-                        Color::Red
-                    };
-
-                    // Fetch detailed results
-                    let detail = self.get_record_detail(&id.to_string());
-                    let mut display = verdict_name.to_string();
-
-                    if let Ok(record) = &detail {
-                        let subtasks = record
-                            .pointer("/detail/judgeResult/subtasks")
-                            .and_then(|v| v.as_array());
-
-                        if let Some(subtasks) = subtasks {
-                            if subtasks.len() > 1 {
-                                // Multi-subtask: show score and per-subtask
-                                if !is_accepted {
-                                    display.push_str(&format!(" ({}pts)", score));
-                                }
-                                let _ = execute!(stdout, SetForegroundColor(color));
-                                println!("{}", display);
-                                let _ = execute!(stdout, ResetColor);
-
-                                for s in subtasks {
-                                    let sid = s.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
-                                    let s_score =
-                                        s.get("score").and_then(|v| v.as_i64()).unwrap_or(0);
-                                    let s_status =
-                                        s.get("status").and_then(|v| v.as_i64()).unwrap_or(0);
-                                    let cases = s.get("testCases").and_then(|v| v.as_object());
-                                    let total = cases.map(|c| c.len()).unwrap_or(0);
-
-                                    let s_accepted = s_status == 12;
-                                    let line_color =
-                                        if s_accepted { Color::Green } else { Color::Red };
-
-                                    let mut line = format!("  Subtask {}: {}pts", sid + 1, s_score);
-                                    if !s_accepted {
-                                        if let Some(cases) = cases {
-                                            let passed = cases
-                                                .values()
-                                                .filter(|c| {
-                                                    c.get("status").and_then(|v| v.as_i64())
-                                                        == Some(12)
-                                                })
-                                                .count();
-                                            if let Some((fail_id, fail_st)) = first_fail_status(cases) {
-                                                line.push_str(&format!(
-                                                    " ({} on test {}, {}/{} passed)",
-                                                    status_name(fail_st),
-                                                    fail_id + 1,
-                                                    passed,
-                                                    total
-                                                ));
-                                            } else {
-                                                line.push_str(&format!(
-                                                    " ({}/{} passed)",
-                                                    passed, total
-                                                ));
-                                            }
-                                        }
-                                    }
-
-                                    let _ = execute!(stdout, SetForegroundColor(line_color));
-                                    println!("{}", line);
-                                    let _ = execute!(stdout, ResetColor);
-                                }
-                                return Ok(());
-                            } else if subtasks.len() == 1 && !is_accepted {
-                                // Single subtask: use first failing test verdict
-                                let s = &subtasks[0];
-                                if let Some(cases) = s.get("testCases").and_then(|v| v.as_object())
-                                {
-                                    let total = cases.len();
-                                    if let Some((fail_id, fail_st)) = first_fail_status(cases) {
-                                        display = format!(
-                                            "{} on test {}/{}",
-                                            status_name(fail_st),
-                                            fail_id + 1,
-                                            total
-                                        );
-                                    }
-                                    if score > 0 {
-                                        display.push_str(&format!(" ({}pts)", score));
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    let _ = execute!(stdout, SetForegroundColor(color));
-                    println!("{}", display);
-                    let _ = execute!(stdout, ResetColor);
+                    // Final verdict — details come from the same get_record_detail
+                    // endpoint poll_by_rid uses.
+                    let detail = self.get_record_detail(&id.to_string()).ok();
+                    self.render_terminal_verdict(status, score, detail.as_ref());
                     return Ok(());
                 }
                 break;
@@ -430,6 +332,136 @@ impl LuoguClient {
 
             thread::sleep(Duration::from_secs(2));
         }
+    }
+
+    /// Poll a specific record id (rid) until it hits a terminal verdict.
+    /// Used when we know the rid up-front (direct-submit success path) —
+    /// avoids the /record/list endpoint which 403s on contest-only problems.
+    fn poll_by_rid(&self, rid: i64) -> Result<(), String> {
+        let mut stdout = std::io::stdout();
+        let mut last_len = 0;
+        loop {
+            clear(last_len);
+            let detail = self.get_record_detail(&rid.to_string())?;
+            let status = detail
+                .get("status")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(-1);
+            let score = detail
+                .get("score")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+
+            if status == 0 || status == 1 {
+                let progress = progress_label(status);
+                let _ = execute!(stdout, SetForegroundColor(Color::Yellow));
+                print!("{}", progress);
+                let _ = execute!(stdout, ResetColor);
+                let _ = std::io::Write::flush(&mut std::io::stdout());
+                last_len = progress.len();
+                thread::sleep(Duration::from_secs(2));
+            } else {
+                self.render_terminal_verdict(status, score, Some(&detail));
+                return Ok(());
+            }
+        }
+    }
+
+    fn render_terminal_verdict(
+        &self,
+        status: i64,
+        score: i64,
+        detail: Option<&serde_json::Value>,
+    ) {
+        let mut stdout = std::io::stdout();
+        let verdict_name = status_name(status);
+        let is_accepted = status == 12;
+        let color = if is_accepted { Color::Green } else { Color::Red };
+        let mut display = verdict_name.to_string();
+
+        if let Some(record) = detail {
+            let subtasks = record
+                .pointer("/detail/judgeResult/subtasks")
+                .and_then(|v| v.as_array());
+
+            if let Some(subtasks) = subtasks {
+                if subtasks.len() > 1 {
+                    // Multi-subtask: show score and per-subtask breakdown.
+                    if !is_accepted {
+                        display.push_str(&format!(" ({}pts)", score));
+                    }
+                    let _ = execute!(stdout, SetForegroundColor(color));
+                    println!("{}", display);
+                    let _ = execute!(stdout, ResetColor);
+
+                    for s in subtasks {
+                        let sid = s.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+                        let s_score = s.get("score").and_then(|v| v.as_i64()).unwrap_or(0);
+                        let s_status = s.get("status").and_then(|v| v.as_i64()).unwrap_or(0);
+                        let cases = s.get("testCases").and_then(|v| v.as_object());
+                        let total = cases.map(|c| c.len()).unwrap_or(0);
+                        let s_accepted = s_status == 12;
+                        let line_color = if s_accepted { Color::Green } else { Color::Red };
+
+                        let mut line = format!("  Subtask {}: {}pts", sid + 1, s_score);
+                        if !s_accepted {
+                            if let Some(cases) = cases {
+                                let passed = cases
+                                    .values()
+                                    .filter(|c| {
+                                        c.get("status").and_then(|v| v.as_i64()) == Some(12)
+                                    })
+                                    .count();
+                                if let Some((fail_id, fail_st)) = first_fail_status(cases) {
+                                    line.push_str(&format!(
+                                        " ({} on test {}, {}/{} passed)",
+                                        status_name(fail_st),
+                                        fail_id + 1,
+                                        passed,
+                                        total
+                                    ));
+                                } else {
+                                    line.push_str(&format!(" ({}/{} passed)", passed, total));
+                                }
+                            }
+                        }
+
+                        let _ = execute!(stdout, SetForegroundColor(line_color));
+                        println!("{}", line);
+                        let _ = execute!(stdout, ResetColor);
+                    }
+                    return;
+                } else if subtasks.len() == 1 && !is_accepted {
+                    // Single subtask: annotate with first failing test.
+                    let s = &subtasks[0];
+                    if let Some(cases) = s.get("testCases").and_then(|v| v.as_object()) {
+                        let total = cases.len();
+                        if let Some((fail_id, fail_st)) = first_fail_status(cases) {
+                            display = format!(
+                                "{} on test {}/{}",
+                                status_name(fail_st),
+                                fail_id + 1,
+                                total
+                            );
+                        }
+                        if score > 0 {
+                            display.push_str(&format!(" ({}pts)", score));
+                        }
+                    }
+                }
+            }
+        }
+
+        let _ = execute!(stdout, SetForegroundColor(color));
+        println!("{}", display);
+        let _ = execute!(stdout, ResetColor);
+    }
+}
+
+fn progress_label(status: i64) -> String {
+    match status {
+        1 => "Judging".to_string(),
+        _ => "Waiting".to_string(),
     }
 }
 
@@ -663,7 +695,7 @@ pub fn submit(url: String, language: String, source: String) {
     match client.try_direct_submit(&pid, contest_id.as_deref(), &language, &source) {
         Ok(rid) => {
             println!("Submission url: https://www.luogu.com.cn/record/{}", rid);
-            if let Err(e) = client.poll_verdict(&pid, contest_id.as_deref(), &known_ids, || {}) {
+            if let Err(e) = client.poll_by_rid(rid) {
                 eprintln!("Verdict polling failed: {}", e);
             }
             return;
