@@ -206,8 +206,10 @@ impl LuoguClient {
             self.uid, pid
         );
         let body = self.get_page(&url)?;
-        let data: serde_json::Value = serde_json::from_str(&body)
-            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+        let data: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+            let dump = dump_page_for_debug(&body, "records-list");
+            format!("Failed to parse records JSON: {} ({})", e, dump)
+        })?;
         Ok(data
             .pointer("/currentData/records/result")
             .and_then(|v| v.as_array())
@@ -221,11 +223,16 @@ impl LuoguClient {
             record_id
         );
         let body = self.get_page(&url)?;
-        let data: serde_json::Value = serde_json::from_str(&body)
-            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+        let data: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+            let dump = dump_page_for_debug(&body, "record-detail");
+            format!("Failed to parse record JSON: {} ({})", e, dump)
+        })?;
         data.pointer("/currentData/record")
             .cloned()
-            .ok_or("No record data found".to_string())
+            .ok_or_else(|| {
+                let dump = dump_page_for_debug(&body, "record-detail-no-record");
+                format!("No record data found in response ({})", dump)
+            })
     }
 
     fn poll_verdict<F: FnMut()>(
@@ -608,7 +615,8 @@ pub fn submit(url: String, language: String, source: String) {
     // Try direct HTTPS POST first. Any failure = fall back to browser.
     println!("Submitting...");
     match client.try_direct_submit(&pid, contest_id.as_deref(), &language, &source) {
-        Ok(_rid) => {
+        Ok(rid) => {
+            println!("Submission url: https://www.luogu.com.cn/record/{}", rid);
             if let Err(e) = client.poll_verdict(&pid, &known_ids, || {}) {
                 eprintln!("Verdict polling failed: {}", e);
             }
