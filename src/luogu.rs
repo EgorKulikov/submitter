@@ -200,20 +200,27 @@ impl LuoguClient {
             .ok_or_else(|| format!("No rid in submit response: {}", resp_body))
     }
 
+    /// Luogu contest problems are T-prefixed while the contest is live and
+    /// get renamed to a P-prefix afterwards. T-prefix pids 403 the plain
+    /// pid-based records URL ("您无权查看该题目") — they only work when
+    /// scoped by contest. P-prefix pids work either way; the pid-based URL
+    /// is simpler and doesn't need a contest id, so use it.
+    fn use_contest_scope(pid: &str, contest_id: Option<&str>) -> bool {
+        pid.starts_with('T') && contest_id.is_some()
+    }
+
     fn records_list_url(&self, pid: &str, contest_id: Option<&str>) -> String {
-        // Contest-only problems 403 `?user=X&pid=Y` ("您无权查看该题目").
-        // Scoping by contest instead (without pid) is allowed because it's
-        // your own participation data. When we do that we filter client-
-        // side to matching pid in get_records.
-        match contest_id {
-            Some(cid) => format!(
+        if Self::use_contest_scope(pid, contest_id) {
+            format!(
                 "https://www.luogu.com.cn/record/list?user={}&contestId={}&page=1&_contentOnly=1",
-                self.uid, cid
-            ),
-            None => format!(
+                self.uid,
+                contest_id.unwrap()
+            )
+        } else {
+            format!(
                 "https://www.luogu.com.cn/record/list?user={}&pid={}&page=1&_contentOnly=1",
                 self.uid, pid
-            ),
+            )
         }
     }
 
@@ -235,7 +242,7 @@ impl LuoguClient {
             .unwrap_or_default();
         // Contest-scoped URL returns records for every problem in the contest;
         // narrow to this pid so poll_verdict tracks the right one.
-        if contest_id.is_some() {
+        if Self::use_contest_scope(pid, contest_id) {
             Ok(all
                 .into_iter()
                 .filter(|r| {
