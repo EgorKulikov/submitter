@@ -278,18 +278,19 @@ impl LuoguClient {
                 })
             {
                 empty_polls += 1;
-                if empty_polls == 15 {
+                if empty_polls >= 15 {
+                    // Dump one snapshot and give up — records list stays
+                    // stale (typical when the problem is contest-only and
+                    // the list endpoint 403s, or CLI cookies drift from
+                    // the browser session that just submitted).
                     let body = self
                         .get_page(&self.records_list_url(pid, contest_id))
                         .unwrap_or_default();
                     let dump = dump_page_for_debug(&body, "poll-stalled");
-                    let progress =
-                        format!("Waiting for submission ({} records, none new; {})", records.len(), dump);
-                    let _ = execute!(stdout, SetForegroundColor(Color::Yellow));
-                    print!("{}", progress);
-                    let _ = execute!(stdout, ResetColor);
-                    let _ = std::io::Write::flush(&mut std::io::stdout());
-                    last_len = progress.len();
+                    return Err(format!(
+                        "records list did not show the new submission after ~30s ({}). Check the verdict in your browser tab.",
+                        dump,
+                    ));
                 }
                 thread::sleep(Duration::from_secs(2));
                 continue;
