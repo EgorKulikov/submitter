@@ -1,0 +1,19 @@
+name: Diag Yandex 403
+on:
+  push:
+    branches: [diag-yandex-403]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe (no credentials)
+        run: |
+          probe() { echo "=== $*"; curl -s -D - -o body.txt --max-time 30 "$@" | head -30; echo "--- body:"; head -c 1500 body.txt; echo; }
+          probe https://api.contest.yandex.net/api/public/v2/compilers
+          probe -H 'User-Agent:' https://api.contest.yandex.net/api/public/v2/compilers
+          probe -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' https://api.contest.yandex.net/api/public/v2/compilers
+          probe -H 'User-Agent:' -H 'Authorization: OAuth bogus' https://api.contest.yandex.net/api/public/v2/compilers
+          probe -H 'User-Agent:' https://api.contest.yandex.net/api/public/v2/service/introspect
+          probe -6 https://api.contest.yandex.net/api/public/v2/compilers || true
+          probe -4 https://api.contest.yandex.net/api/public/v2/compilers || true
