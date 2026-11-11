@@ -37,7 +37,7 @@ fn diag_yandex_variants() {
     ];
     for (label, rustls, ua) in variants {
         let mut b = Client::builder().redirect(reqwest::redirect::Policy::none());
-        b = if rustls { b.use_rustls_tls() } else { b.use_native_tls() };
+        if rustls { b = b.use_rustls_tls(); }
         let client = b.build().unwrap();
         let mut req = client.get(url).header("Authorization", format!("OAuth {}", access));
         if let Some(ua) = ua {
