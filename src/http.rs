@@ -48,11 +48,27 @@ pub struct HttpClient {
 
 impl HttpClient {
     pub fn new(base_url: &str) -> Self {
-        let client = Client::builder()
+        Self::with_tls(base_url, false)
+    }
+
+    /// Like `new`, but uses rustls instead of the system TLS library.
+    ///
+    /// Yandex's anti-bot filter fingerprints the TLS handshake and answers
+    /// 403 (`x-yandex-captcha`) to native-tls built against newer OpenSSL
+    /// (seen on Ubuntu 26.04). rustls's handshake does not depend on the
+    /// system library, so it behaves the same everywhere.
+    pub fn new_rustls(base_url: &str) -> Self {
+        Self::with_tls(base_url, true)
+    }
+
+    fn with_tls(base_url: &str, rustls: bool) -> Self {
+        let mut builder = Client::builder()
             .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(60))
-            .build()
-            .unwrap();
+            .timeout(Duration::from_secs(60));
+        if rustls {
+            builder = builder.use_rustls_tls();
+        }
+        let client = builder.build().unwrap();
         let domain = base_url
             .trim_start_matches("https://")
             .trim_start_matches("http://")

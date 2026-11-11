@@ -21,7 +21,7 @@ impl YandexClient {
     }
 
     pub fn new() -> Self {
-        let mut http = HttpClient::new("https://api.contest.yandex.net/api/public/v2");
+        let mut http = HttpClient::new_rustls("https://api.contest.yandex.net/api/public/v2");
         http.disable_cookie_sending();
         let saved_access = http.get_cookie("yandex_access_token");
         let saved_refresh = http.get_cookie("yandex_refresh_token");

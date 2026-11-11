@@ -21,7 +21,7 @@ crossterm = "0.28"
 open = { version = "5.3", features = ["shellexecute-on-windows"] }
 rand = "0.8.5"
 rs_sha512 = "0.1"
-reqwest = { version = "0.12", features = ["blocking", "multipart", "json", "cookies", "gzip", "deflate"] }
+reqwest = { version = "0.12", features = ["blocking", "multipart", "json", "cookies", "gzip", "deflate", "rustls-tls"] }
 clipboard = "0.5"
 md-5 = "0.10"
 hmac = "0.12"
