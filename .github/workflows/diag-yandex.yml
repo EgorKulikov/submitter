@@ -4,43 +4,19 @@ on:
     branches: [diag-yandex-403]
 jobs:
   probe:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-26.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Probe (authenticated, read-only)
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libssl-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - run: openssl version -a | head -3; curl --version | head -2
+      - name: Rust client probe (read-only)
         env:
           YANDEX_REFRESH_TOKEN: ${{ secrets.YANDEX_REFRESH_TOKEN }}
-        run: |
-          set +x
-          CID=$(grep -o 'const CLIENT_ID: &str = "[^"]*"' src/yandex.rs | cut -d'"' -f2)
-          CSEC=$(grep -o 'const CLIENT_SECRET: &str = "[^"]*"' src/yandex.rs | cut -d'"' -f2)
-          curl -s -o tok.json -w 'token endpoint: %{http_code}\n' https://oauth.yandex.ru/token \
-            -d grant_type=refresh_token --data-urlencode "refresh_token=$YANDEX_REFRESH_TOKEN" \
-            -d "client_id=$CID" -d "client_secret=$CSEC"
-          ACCESS=$(python3 -c "import json;print(json.load(open('tok.json')).get('access_token',''))")
-          NEWREF=$(python3 -c "import json;print(json.load(open('tok.json')).get('refresh_token',''))")
-          [ -n "$ACCESS" ] && echo "::add-mask::$ACCESS"
-          [ -n "$NEWREF" ] && echo "::add-mask::$NEWREF"
-          python3 -c "import json;d=json.load(open('tok.json'));print('token keys:',sorted(d.keys()),'expires_in',d.get('expires_in'),'scope',d.get('scope'),'error',d.get('error'),d.get('error_description'))"
-          [ "$NEWREF" = "$YANDEX_REFRESH_TOKEN" ] && echo "refresh token unchanged" || echo "refresh token ROTATED"
-          rm -f tok.json
-          B=https://api.contest.yandex.net/api/public/v2
-          probe() { # label, show-body(0/1), curl args...
-            local label=$1 show=$2; shift 2
-            echo "=== $label"
-            curl -s -D hdr.txt -o body.txt --max-time 30 -H "Authorization: OAuth $ACCESS" "$@" || echo "curl failed $?"
-            grep -iv '^set-cookie' hdr.txt | head -25
-            echo "--- body bytes: $(wc -c < body.txt)"
-            if [ "$show" = 1 ] || ! head -c 1 body.txt | grep -q '[{[]'; then
-              python3 -c "import re,sys;t=open('body.txt',errors='replace').read();t=re.sub(r'(?s)<(script|style).*?</\1>','',t);t=re.sub(r'<[^>]+>',' ',t);print(re.sub(r'\s+',' ',t)[:2500])"
-            fi
-          }
-          probe "compilers, no UA" 0 -H 'User-Agent:' $B/compilers
-          probe "compilers, curl UA" 0 $B/compilers
-          probe "compilers, browser UA" 0 -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36' $B/compilers
-          probe "compilers, no UA, http1.1" 0 --http1.1 -H 'User-Agent:' -H 'Accept: */*' $B/compilers
-          probe "introspect (status only)" 0 -H 'User-Agent:' $B/service/introspect
-          probe "contest 90118" 0 -H 'User-Agent:' $B/contests/90118
-          probe "contest 90118 problems" 0 -H 'User-Agent:' $B/contests/90118/problems
-          rm -f hdr.txt body.txt
+        run: cargo test --test diag_yandex -- --nocapture
