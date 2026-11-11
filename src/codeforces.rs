@@ -325,18 +325,18 @@ pub fn submit(task_url: String, language: String, source: String) {
             &data,
         );
         let bytes = Client::builder()
-            .timeout(None)
+            .timeout(Duration::from_secs(60))
             .build()
             .unwrap()
             .get(api_url)
             .header(ACCEPT, "application/json")
             .header(CONTENT_TYPE, "application/json")
             .send()
-            .unwrap()
-            .text()
-            .unwrap();
+            .and_then(|response| response.text())
+            // A network error is one more unreadable response, retried below.
+            .unwrap_or_default();
         // Detect stale/cached responses
-        if bytes == last_response {
+        if !bytes.is_empty() && bytes == last_response {
             stale_count += 1;
             if stale_count >= 5 {
                 // API is returning cached data, wait longer
@@ -359,9 +359,9 @@ pub fn submit(task_url: String, language: String, source: String) {
             }
             Err(_) => {
                 tries += 1;
-                if tries >= 10 {
+                if tries >= 30 {
                     eprintln!("Failed to get submission status from codeforces");
-                    return;
+                    std::process::exit(1);
                 } else {
                     thread::sleep(Duration::from_secs(2));
                     continue;

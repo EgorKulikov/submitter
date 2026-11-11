@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when the extension is absent. Released as
   `submitter-extension-<version>.zip` alongside the existing binaries.
 
+### Fixed
+- Codeforces: a network error while polling `user.status` no longer
+  panics, which dropped the verdict of a submission already made in the
+  browser and printed the `apiKey` and `apiSig` in the request URL. It
+  now counts as a failed poll, polling gives up after about a minute of
+  those in a row and exits non-zero, and a request that hangs times out
+  after 60 seconds.
+
 ## [1.1] - 2026-06-09
 
 ### Added
