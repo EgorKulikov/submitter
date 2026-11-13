@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now counts as a failed poll, polling gives up after about a minute of
   those in a row and exits non-zero, and a request that hangs times out
   after 60 seconds.
+- Extension on Firefox: the background script now runs, so the submit
+  tab closes once submitter sees the submission (Firefox runs
+  `background.scripts`, not a `service_worker`). The manifest declares
+  that no data is collected, which addons.mozilla.org requires to sign
+  the extension, and asks for Firefox 140, where that declaration is
+  supported. Its MAIN-world editor bridge already needed 128.
+  `extension/README.md` explains how to sign a copy, so it survives a
+  browser restart.
 
 ## [1.1] - 2026-06-09
 
