@@ -322,6 +322,28 @@ impl HttpClient {
         self.follow_redirect(resp)
     }
 
+    /// Multipart POST with extra headers that apply to this request only.
+    pub fn post_multipart_with_headers(
+        &mut self,
+        path: &str,
+        form: reqwest::blocking::multipart::Form,
+        headers: &[(&str, &str)],
+    ) -> Result<reqwest::blocking::Response, String> {
+        let url = self.resolve_url(path);
+        let req = self.client.post(&url);
+        let req = self.apply_cookies(req);
+        let mut req = self.apply_headers(req);
+        for (name, value) in headers {
+            req = req.header(*name, *value);
+        }
+        let resp = req
+            .multipart(form)
+            .send()
+            .map_err(|e| format!("POST {} failed: {}", url, e))?;
+        self.save_response_cookies(&resp);
+        self.follow_redirect(resp)
+    }
+
     pub fn post_form(
         &mut self,
         path: &str,

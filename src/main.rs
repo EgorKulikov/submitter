@@ -2,7 +2,7 @@ use regex::Regex;
 use std::env;
 use std::fs::read_to_string;
 use submitter::{
-    atcoder, codechef, coderun, codeforces, eolymp, kattis, kep, luogu, new_yandex, repovive,
+    atcoder, codechef, coderun, codeforces, doj, eolymp, kattis, kep, luogu, new_yandex, repovive,
     toph, ucup, yandex, yosupo,
 };
 
@@ -54,6 +54,7 @@ fn short_name_to_site_key(name: &str) -> Option<String> {
         "yosupo" | "yj" => "judge.yosupo.jp",
         "kep" | "kepuz" => "kep.uz",
         "repovive" | "rv" => "repovive.com",
+        "doj" => "doj.kr",
         _ => return None,
     };
     Some(key.to_string())
@@ -81,6 +82,7 @@ fn do_login(site_key: &str) {
         "judge.yosupo.jp" => yosupo::login(),
         "kep.uz" => kep::login(),
         "repovive.com" => repovive::login(),
+        "doj.kr" => doj::login(),
         _ => eprintln!("Unsupported site: {}", site_key),
     }
 }
@@ -146,6 +148,7 @@ fn main() {
         "judge.yosupo.jp" => yosupo::submit(url.clone(), language.clone(), source),
         "kep.uz" => kep::submit(url.clone(), language.clone(), source),
         "repovive.com" => repovive::submit(url.clone(), language.clone(), source),
+        "doj.kr" => doj::submit(url.clone(), language.clone(), source),
         _ => println!("Unsupported domain: {}", site_key),
     }
 }

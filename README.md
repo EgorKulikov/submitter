@@ -59,7 +59,7 @@ submitter login yandex
 ```
 
 Accepted short names: `ac`, `atcoder`, `cf`, `codeforces`, `cc`, `codechef`, `ucup`, `uoj`, `yandex`, `ya`,
-`toph`, `kattis`, `eolymp`, `eol`, `luogu`, `lg`, `coderun`, `cr`, `kep`, `kepuz`, `repovive`, `rv`. Full URLs
+`toph`, `kattis`, `eolymp`, `eol`, `luogu`, `lg`, `coderun`, `cr`, `kep`, `kepuz`, `repovive`, `rv`, `doj`. Full URLs
 also work.
 
 ## Supported sites
@@ -78,6 +78,7 @@ also work.
 | [CodeRun](https://coderun.yandex.ru)                    | API                                           | API          | browser cookie (EditThisCookie) |
 | [KEP.uz](https://kep.uz)                                | API                                           | API          | browser cookie (EditThisCookie) |
 | [Repovive](https://repovive.com)                        | API                                           | API          | browser cookie (EditThisCookie) |
+| [DOJ](https://doj.kr)                                   | HTTP                                          | API + HTTP   | browser cookie (EditThisCookie) |
 
 ### Notes
 
@@ -97,6 +98,10 @@ also work.
   [EditThisCookie](https://www.editthiscookie.com/) extension and paste the JSON when prompted
 - **Repovive**: on first use, export cookies from a logged-in repovive.com tab using
   [EditThisCookie](https://www.editthiscookie.com/) extension and paste the JSON when prompted
+- **DOJ**: on first use, export cookies from a logged-in doj.kr tab using
+  [EditThisCookie](https://www.editthiscookie.com/) extension and paste the JSON when prompted
+  - Rejected submissions show each subtask's score and verdict, and the first failing test
+    (e.g. `Subtask 1 (0/100): Wrong Answer on test 6/29`)
 
 ## Examples
 
@@ -145,4 +150,7 @@ submitter "https://kep.uz/contests/487/problem/A" "Rust" solution.rs
 
 # Repovive
 submitter "https://repovive.com/contests/10/problems/A" "Rust" solution.rs
+
+# DOJ
+submitter "https://doj.kr/en/problems/5" "Rust" solution.rs
 ```

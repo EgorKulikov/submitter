@@ -10,7 +10,7 @@ repository = "https://github.com/EgorKulikov/submitter"
 maintainer = "Egor Kulikov <egor@egork.net>"
 section = "utils"
 priority = "optional"
-extended-description = "Submit solutions to AtCoder, Codeforces, CodeChef, Yandex Contest, UOJ, UCup, Toph, Kattis, Eolymp, Luogu, CodeRun, KEP.uz directly from the command line."
+extended-description = "Submit solutions to AtCoder, Codeforces, CodeChef, Yandex Contest, UOJ, UCup, Toph, Kattis, Eolymp, Luogu, CodeRun, KEP.uz, DOJ directly from the command line."
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }

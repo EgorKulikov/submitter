@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   source from a short-lived loopback server. The CLI works unchanged
   when the extension is absent. Released as
   `submitter-extension-<version>.zip` alongside the existing binaries.
+- DOJ (`doj.kr`) support: cookie-import login, submit through the
+  problem page's own form action, verdict polling. Rejected submissions
+  get a per-subtask breakdown (score, verdict, first failing test), like
+  Eolymp. Short alias: `doj`.
 
 ### Fixed
 - Codeforces: a network error while polling `user.status` no longer

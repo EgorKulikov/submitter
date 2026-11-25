@@ -8,6 +8,7 @@ pub mod luogu;
 pub mod new_yandex;
 pub mod yosupo;
 pub mod codeforces;
+pub mod doj;
 pub mod repovive;
 pub mod eolymp;
 pub mod extbridge;
