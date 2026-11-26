@@ -21,9 +21,24 @@ select + click on the AtCoder, Codeforces, and Luogu submit pages.
 3. Click **Load Temporary Add-on**, select the unzipped folder's
    `manifest.json`.
 
-Note: Firefox temporary add-ons disappear on browser restart. To make
-it persistent, build a signed `.xpi` with `web-ext build` (see Mozilla
-docs).
+Firefox temporary add-ons disappear on browser restart, and release
+Firefox only installs add-ons signed by Mozilla. To keep the extension,
+sign your own copy as an unlisted add-on (free, automatic, never listed
+on the store):
+
+1. In the unzipped folder's `manifest.json`, replace
+   `browser_specific_settings.gecko.id` with an ID of your own, such as
+   `{<a random UUID>}`. Signing ties the ID to the account that signs it.
+2. Zip the folder's contents, with `manifest.json` at the root of the zip.
+3. On [addons.mozilla.org](https://addons.mozilla.org/developers/),
+   choose **Submit a New Add-on**, then **On your own**, and upload the zip.
+4. Once it is signed, download the `.xpi` and install it from
+   `about:addons` → gear icon → **Install Add-on From File**.
+5. In `about:addons` → Submitter Helper → **Permissions**, check that
+   every site is allowed, `127.0.0.1` included.
+
+To update it later, raise `version` in `manifest.json` and upload it as a
+new version of the same add-on.
 
 ## How it works
 
