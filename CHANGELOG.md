@@ -38,6 +38,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supported. Its MAIN-world editor bridge already needed 128.
   `extension/README.md` explains how to sign a copy, so it survives a
   browser restart.
+- AtCoder, Luogu, CodeRun, new Yandex Contest, KEP.uz, Repovive and
+  DOJ: when no session is saved and there is no terminal to paste the
+  cookies into (submitter run from an editor or a script), the login
+  prompt no longer spins at full CPU forever. It stops with an error
+  telling you to run `submitter login <site>`, and a submit whose login
+  fails now exits non-zero.
 
 ## [1.1] - 2026-06-09
 

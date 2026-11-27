@@ -74,25 +74,7 @@ impl AtcoderClient {
 
         println!("Export your AtCoder cookies using the EditThisCookie browser extension on a logged-in atcoder.jp tab");
         println!("Paste the JSON cookies array:");
-        let mut input = String::new();
-        let mut bracket_count = 0i32;
-        loop {
-            let mut line = String::new();
-            std::io::stdin()
-                .read_line(&mut line)
-                .map_err(|e| format!("Failed to read input: {}", e))?;
-            for c in line.chars() {
-                if c == '[' || c == '{' {
-                    bracket_count += 1;
-                } else if c == ']' || c == '}' {
-                    bracket_count -= 1;
-                }
-            }
-            input.push_str(&line);
-            if bracket_count <= 0 && !input.trim().is_empty() {
-                break;
-            }
-        }
+        let input = crate::read_pasted_json(std::io::stdin().lock(), "atcoder")?;
 
         // Parse JSON cookies array
         let cookies: Vec<serde_json::Value> = serde_json::from_str(input.trim())
@@ -391,7 +373,7 @@ pub fn submit(url: String, language: String, source: String) {
 
     if let Err(e) = client.login() {
         eprintln!("{}", e);
-        return;
+        std::process::exit(1);
     }
 
     let (contest_id, task_id) = match parse_url(&url) {
