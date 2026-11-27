@@ -365,6 +365,7 @@ pub fn login() {
     let mut client = AtcoderClient::new();
     if let Err(e) = client.login() {
         eprintln!("Login failed: {}", e);
+        std::process::exit(1);
     }
 }
 
@@ -380,7 +381,7 @@ pub fn submit(url: String, language: String, source: String) {
         Some(parsed) => parsed,
         None => {
             eprintln!("Could not parse URL: {}", url);
-            return;
+            std::process::exit(1);
         }
     };
 
@@ -401,6 +402,7 @@ pub fn submit(url: String, language: String, source: String) {
             // Direct submit succeeded — no browser needed, no clipboard needed.
             if let Err(e) = client.poll_verdict(&contest_id, &known_ids, || {}) {
                 eprintln!("Verdict polling failed: {}", e);
+                std::process::exit(1);
             }
             return;
         }
@@ -443,6 +445,7 @@ pub fn submit(url: String, language: String, source: String) {
         }
     }) {
         eprintln!("Verdict polling failed: {}", e);
+        std::process::exit(1);
     }
 }
 

@@ -452,6 +452,7 @@ pub fn login() {
     let mut client = CodechefClient::new();
     if let Err(e) = client.login() {
         eprintln!("Login failed: {}", e);
+        std::process::exit(1);
     }
 }
 
@@ -461,14 +462,14 @@ pub fn submit(url: String, language: String, source: String) {
     println!("Logging in");
     if let Err(e) = client.login() {
         eprintln!("Login failed: {}", e);
-        return;
+        std::process::exit(1);
     }
 
     let (contest_code, problem_code) = match parse_url(&url) {
         Some(parsed) => parsed,
         None => {
             eprintln!("Could not parse URL: {}", url);
-            return;
+            std::process::exit(1);
         }
     };
 
@@ -476,7 +477,7 @@ pub fn submit(url: String, language: String, source: String) {
         Ok(found) => found,
         Err(e) => {
             eprintln!("{}", e);
-            return;
+            std::process::exit(1);
         }
     };
     println!("Language: {} (id={})", lang_name, lang_id);
@@ -487,7 +488,7 @@ pub fn submit(url: String, language: String, source: String) {
             Ok(id) => id,
             Err(e) => {
                 eprintln!("{}", e);
-                return;
+                std::process::exit(1);
             }
         };
     println!(
@@ -497,5 +498,6 @@ pub fn submit(url: String, language: String, source: String) {
 
     if let Err(e) = client.poll_verdict(&solution_id) {
         eprintln!("Verdict polling failed: {}", e);
+        std::process::exit(1);
     }
 }

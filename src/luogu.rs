@@ -643,6 +643,7 @@ pub fn login() {
     let mut client = LuoguClient::new();
     if let Err(e) = client.login() {
         eprintln!("Login failed: {}", e);
+        std::process::exit(1);
     }
 }
 
@@ -658,7 +659,7 @@ pub fn submit(url: String, language: String, source: String) {
         Some(p) => p,
         None => {
             eprintln!("Could not parse URL: {}", url);
-            return;
+            std::process::exit(1);
         }
     };
 
@@ -680,6 +681,7 @@ pub fn submit(url: String, language: String, source: String) {
             println!("Submission url: https://www.luogu.com.cn/record/{}", rid);
             if let Err(e) = client.poll_by_rid(rid) {
                 eprintln!("Verdict polling failed: {}", e);
+                std::process::exit(1);
             }
             return;
         }
@@ -715,6 +717,7 @@ pub fn submit(url: String, language: String, source: String) {
         }
     }) {
         eprintln!("Verdict polling failed: {}", e);
+        std::process::exit(1);
     }
 }
 

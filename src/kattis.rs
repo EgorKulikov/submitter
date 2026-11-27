@@ -562,9 +562,11 @@ pub fn login() {
     if let Some((_, username, token)) = read_kattisrc() {
         if let Err(e) = client.login_with_credentials(&username, &token) {
             eprintln!("Login failed: {}", e);
+            std::process::exit(1);
         }
     } else if let Err(e) = client.login() {
         eprintln!("Login failed: {}", e);
+        std::process::exit(1);
     }
 }
 
@@ -577,13 +579,13 @@ pub fn submit(url: String, language: String, source: String, filename: String) {
         println!("Logging in");
         if let Err(e) = client.login_with_credentials(&username, &token) {
             eprintln!("Login failed: {}", e);
-            return;
+            std::process::exit(1);
         }
     } else {
         println!("Logging in");
         if let Err(e) = client.login() {
             eprintln!("Login failed: {}", e);
-            return;
+            std::process::exit(1);
         }
     }
 
@@ -591,7 +593,7 @@ pub fn submit(url: String, language: String, source: String, filename: String) {
         Some(p) => p,
         None => {
             eprintln!("Could not parse URL: {}", url);
-            return;
+            std::process::exit(1);
         }
     };
 
@@ -604,11 +606,12 @@ pub fn submit(url: String, language: String, source: String, filename: String) {
         Ok(id) => id,
         Err(e) => {
             eprintln!("{}", e);
-            return;
+            std::process::exit(1);
         }
     };
 
     if let Err(e) = client.poll_verdict(&submission_id) {
         eprintln!("Verdict polling failed: {}", e);
+        std::process::exit(1);
     }
 }

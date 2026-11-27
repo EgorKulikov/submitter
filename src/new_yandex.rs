@@ -431,6 +431,7 @@ pub fn login() {
     let mut client = NewYandexClient::new();
     if let Err(e) = client.login() {
         eprintln!("Login failed: {}", e);
+        std::process::exit(1);
     }
 }
 
@@ -441,7 +442,7 @@ pub fn submit(url: String, language: String, source: String) {
         Some(p) => p,
         None => {
             eprintln!("Could not parse URL: {}", url);
-            return;
+            std::process::exit(1);
         }
     };
 
@@ -456,12 +457,13 @@ pub fn submit(url: String, language: String, source: String) {
         Ok(u) => u,
         Err(e) => {
             eprintln!("{}", e);
-            return;
+            std::process::exit(1);
         }
     };
 
     if let Err(e) = client.poll_verdict(&uuid) {
         eprintln!("Verdict polling failed: {}", e);
+        std::process::exit(1);
     }
 }
 

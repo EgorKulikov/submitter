@@ -463,6 +463,7 @@ pub fn login() {
     let mut client = TophClient::new();
     if let Err(e) = client.login() {
         eprintln!("Login failed: {}", e);
+        std::process::exit(1);
     }
 }
 
@@ -472,14 +473,14 @@ pub fn submit(url: String, language: String, source: String) {
     println!("Logging in");
     if let Err(e) = client.login() {
         eprintln!("Login failed: {}", e);
-        return;
+        std::process::exit(1);
     }
 
     let parsed = match parse_url(&url) {
         Some(p) => p,
         None => {
             eprintln!("Could not parse URL: {}", url);
-            return;
+            std::process::exit(1);
         }
     };
 
@@ -489,14 +490,14 @@ pub fn submit(url: String, language: String, source: String) {
                 Ok(id) => id,
                 Err(e) => {
                     eprintln!("{}", e);
-                    return;
+                    std::process::exit(1);
                 }
             };
             let (lang_id, lang_name) = match client.find_language_id(&problem_id, &language) {
                 Ok(found) => found,
                 Err(e) => {
                     eprintln!("{}", e);
-                    return;
+                    std::process::exit(1);
                 }
             };
             println!("Language: {}", lang_name);
@@ -505,7 +506,7 @@ pub fn submit(url: String, language: String, source: String) {
                 Ok(id) => id,
                 Err(e) => {
                     eprintln!("{}", e);
-                    return;
+                    std::process::exit(1);
                 }
             }
         }
@@ -526,7 +527,7 @@ pub fn submit(url: String, language: String, source: String) {
                 Ok(path) => path,
                 Err(e) => {
                     eprintln!("{}", e);
-                    return;
+                    std::process::exit(1);
                 }
             };
             let problem_id = if problem_path.starts_with("__id:") {
@@ -536,7 +537,7 @@ pub fn submit(url: String, language: String, source: String) {
                     Ok(id) => id,
                     Err(e) => {
                         eprintln!("{}", e);
-                        return;
+                        std::process::exit(1);
                     }
                 }
             };
@@ -544,7 +545,7 @@ pub fn submit(url: String, language: String, source: String) {
                 Ok(found) => found,
                 Err(e) => {
                     eprintln!("{}", e);
-                    return;
+                    std::process::exit(1);
                 }
             };
             println!("Language: {}", lang_name);
@@ -553,7 +554,7 @@ pub fn submit(url: String, language: String, source: String) {
                 Ok(id) => id,
                 Err(e) => {
                     eprintln!("{}", e);
-                    return;
+                    std::process::exit(1);
                 }
             }
         }
@@ -561,5 +562,6 @@ pub fn submit(url: String, language: String, source: String) {
 
     if let Err(e) = client.poll_verdict(&submission_id) {
         eprintln!("Verdict polling failed: {}", e);
+        std::process::exit(1);
     }
 }

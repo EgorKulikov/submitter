@@ -264,7 +264,7 @@ pub fn submit(task_url: String, language: String, source: String) {
     let pos = match task_url.rfind("/problem/") {
         None => {
             eprintln!("Could not parse URL: {}", task_url);
-            return;
+            std::process::exit(1);
         }
         Some(pos) => pos,
     };

@@ -68,6 +68,7 @@ fn do_login(site_key: &str) {
             let mut client = submitter::uoj::UojClient::new("https://uoj.ac", "UOJ");
             if let Err(e) = client.login() {
                 eprintln!("Login failed: {}", e);
+                std::process::exit(1);
             }
         }
         "yandex.com" | "yandex.ru" => yandex::login(),
@@ -83,7 +84,10 @@ fn do_login(site_key: &str) {
         "kep.uz" => kep::login(),
         "repovive.com" => repovive::login(),
         "doj.kr" => doj::login(),
-        _ => eprintln!("Unsupported site: {}", site_key),
+        _ => {
+            eprintln!("Unsupported site: {}", site_key);
+            std::process::exit(1);
+        }
     }
 }
 
@@ -96,7 +100,10 @@ fn main() {
             .or_else(|| site_key_from_url(site));
         match key {
             Some(key) => do_login(&key),
-            None => eprintln!("Unknown site: {}", site),
+            None => {
+                eprintln!("Unknown site: {}", site);
+                std::process::exit(1);
+            }
         }
         return;
     }
@@ -104,7 +111,7 @@ fn main() {
     if args.len() != 4 {
         println!("Usage: submitter <url> <language> <file>");
         println!("       submitter login <url>");
-        return;
+        std::process::exit(1);
     }
 
     let url = &args[1];
@@ -115,8 +122,8 @@ fn main() {
     let site_key = match site_key_from_url(url) {
         Some(key) => key,
         None => {
-            println!("Unexpected URL");
-            return;
+            eprintln!("Unexpected URL");
+            std::process::exit(1);
         }
     };
 
@@ -128,12 +135,13 @@ fn main() {
             println!("Logging in");
             if let Err(e) = client.login() {
                 eprintln!("Login failed: {}", e);
-                return;
+                std::process::exit(1);
             }
             let path = url.find("uoj.ac").map(|p| &url[p + 6..]).unwrap_or("/");
             println!("Submitting");
             if let Err(e) = client.submit(path, &language, &source) {
                 eprintln!("Submit failed: {}", e);
+                std::process::exit(1);
             }
         }
         "yandex.com" | "yandex.ru" => yandex::submit(url.clone(), language.clone(), source),
@@ -149,6 +157,9 @@ fn main() {
         "kep.uz" => kep::submit(url.clone(), language.clone(), source),
         "repovive.com" => repovive::submit(url.clone(), language.clone(), source),
         "doj.kr" => doj::submit(url.clone(), language.clone(), source),
-        _ => println!("Unsupported domain: {}", site_key),
+        _ => {
+            eprintln!("Unsupported domain: {}", site_key);
+            std::process::exit(1);
+        }
     }
 }

@@ -482,6 +482,7 @@ pub fn login() {
     let mut client = EolympClient::new();
     if let Err(e) = client.login() {
         eprintln!("Login failed: {}", e);
+        std::process::exit(1);
     }
 }
 
@@ -491,14 +492,14 @@ pub fn submit(url: String, language: String, source: String) {
     println!("Logging in");
     if let Err(e) = client.login() {
         eprintln!("Login failed: {}", e);
-        return;
+        std::process::exit(1);
     }
 
     let parsed = match parse_url(&url) {
         Some(p) => p,
         None => {
             eprintln!("Could not parse URL: {}", url);
-            return;
+            std::process::exit(1);
         }
     };
 
@@ -512,7 +513,7 @@ pub fn submit(url: String, language: String, source: String) {
                     "Unknown language '{}'. Use a runtime ID like 'cpp:23-gnu14'",
                     language
                 );
-                return;
+                std::process::exit(1);
             }
         }
     };
@@ -522,7 +523,7 @@ pub fn submit(url: String, language: String, source: String) {
         Ok(url) => url,
         Err(e) => {
             eprintln!("Failed to look up space: {}", e);
-            return;
+            std::process::exit(1);
         }
     };
 
@@ -538,7 +539,7 @@ pub fn submit(url: String, language: String, source: String) {
                     Ok(found) => found,
                     Err(e) => {
                         eprintln!("{}", e);
-                        return;
+                        std::process::exit(1);
                     }
                 };
             println!("Problem: {}", problem_title);
@@ -554,13 +555,14 @@ pub fn submit(url: String, language: String, source: String) {
                 Ok(id) => id,
                 Err(e) => {
                     eprintln!("{}", e);
-                    return;
+                    std::process::exit(1);
                 }
             };
             println!("Submission ID: {}", submission_id);
 
             if let Err(e) = client.poll_verdict(&contest_url, &submission_id) {
                 eprintln!("Verdict polling failed: {}", e);
+                std::process::exit(1);
             }
         }
         EolympUrl::ArchiveProblem { problem_id } => {
@@ -570,13 +572,14 @@ pub fn submit(url: String, language: String, source: String) {
                     Ok(id) => id,
                     Err(e) => {
                         eprintln!("{}", e);
-                        return;
+                        std::process::exit(1);
                     }
                 };
             println!("Submission ID: {}", submission_id);
 
             if let Err(e) = client.poll_verdict(&space_url, &submission_id) {
                 eprintln!("Verdict polling failed: {}", e);
+                std::process::exit(1);
             }
         }
     }

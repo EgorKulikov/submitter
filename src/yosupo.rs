@@ -506,7 +506,7 @@ pub fn submit(url: String, language: String, source: String) {
         Some(p) => p,
         None => {
             eprintln!("Could not parse URL: {}", url);
-            return;
+            std::process::exit(1);
         }
     };
 
@@ -516,11 +516,12 @@ pub fn submit(url: String, language: String, source: String) {
         Ok(id) => id,
         Err(e) => {
             eprintln!("{}", e);
-            return;
+            std::process::exit(1);
         }
     };
     if let Err(e) = client.poll_verdict(id) {
         eprintln!("Verdict polling failed: {}", e);
+        std::process::exit(1);
     }
 }
 

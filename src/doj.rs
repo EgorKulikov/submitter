@@ -792,6 +792,7 @@ pub fn login() {
     let mut client = DojClient::new();
     if let Err(e) = client.login() {
         eprintln!("Login failed: {}", e);
+        std::process::exit(1);
     }
 }
 
@@ -800,7 +801,7 @@ pub fn submit(url: String, language: String, source: String) {
     let url = url.split('#').next().unwrap_or(&url).to_string();
     if !is_doj_url(&url) {
         eprintln!("Could not parse URL: {}", url);
-        return;
+        std::process::exit(1);
     }
 
     let mut client = DojClient::new();
@@ -816,12 +817,13 @@ pub fn submit(url: String, language: String, source: String) {
         Ok((id, _)) => id,
         Err(e) => {
             eprintln!("{}", e);
-            return;
+            std::process::exit(1);
         }
     };
 
     if let Err(e) = client.poll_verdict(&id) {
         eprintln!("Verdict polling failed: {}", e);
+        std::process::exit(1);
     }
 }
 

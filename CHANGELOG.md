@@ -44,6 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prompt no longer spins at full CPU forever. It stops with an error
   telling you to run `submitter login <site>`, and a submit whose login
   fails now exits non-zero.
+- Every failure now exits non-zero, on all sites: a failed
+  `submitter login <site>`, a failed login or submit, a URL or language
+  that is not recognised, failed verdict polling, an unknown site, and
+  wrong arguments. Before, most of these printed an error and exited 0.
+  A rejected verdict is not a failure and still exits 0.
 
 ## [1.1] - 2026-06-09
 
